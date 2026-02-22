@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Los Santos — Crime Control</title>
+  <!-- THEME LOCK: runs before fonts/CSS load — zero flash guaranteed -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('lsTheme');
+      if (t !== 'light') { localStorage.setItem('lsTheme','dark'); t = 'dark'; }
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <style>
+    html[data-theme="dark"]  { background: #050a0e; color-scheme: dark; }
+    html[data-theme="light"] { background: #f0f4f8; color-scheme: light; }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --neon: #00f5a0;
+      --neon2: #ffd700;
+      --red: #ff2d55;
+      --bg: #050a0e;
+      --card: #0a1520;
+      --border: #1a3040;
+      --text: #c8d8e0;
+      --muted: #4a6070;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      overflow-x: hidden;
+      cursor: crosshair;
+    }
+
+    /* ── SCANLINE OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── NOISE GRAIN ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 998;
+      opacity: 0.4;
+    }
+
+    /* ── CAR SPLASH SCREEN ── */
+    #carSplash {
+      position: fixed; inset: 0; z-index: 10000;
+      background: #020609;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    #carSplash.hide {
+      animation: splashOut 0.7s cubic-bezier(0.4,0,0.2,1) 0.1s both;
+    }
+    @keyframes splashOut {
+      0%   { opacity:1; transform: scale(1); }
+      60%  { opacity:1; transform: scale(1.04); }
+      100% { opacity:0; transform: scale(1.08); pointer-events:none; }
+    }
+
+    /* Road */
+    .splash-road {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 38%; background: #0a0f12;
+      border-top: 3px solid #1a2a35;
+      overflow: hidden;
+    }
+    /* Dashed centre line */
+    .road-dash {
+      position: absolute; top: 50%; left: -100%;
+      height: 4px; background: repeating-linear-gradient(90deg,#ffd700 0,#ffd700 60px,transparent 60px,transparent 120px);
+      width: 300%; transform: translateY(-50%);
+      animation: dashMove 0.35s linear infinite;
+    }
+    @keyframes dashMove { from{transform:translateY(-50%) translateX(0)} to{transform:translateY(-50%) translateX(120px)} }
+    /* Road edge lines */
+    .road-edge {
+      position: absolute; left: 0; right: 0; height: 3px;
+      background: rgba(0,245,160,0.3);
+      box-shadow: 0 0 8px rgba(0,245,160,0.4);
+    }
+    .road-edge.top { top: 12px; }
+    .road-edge.bot { bottom: 12px; }
+
+    /* Speed lines */
+    .splash-speed-wrap {
+      position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+    }
+    .speed-line {
+      position: absolute; height: 1px; background: linear-gradient(90deg, transparent, rgba(0,245,160,0.3), transparent);
+      transform-origin: right center;
+    }
+
+    /* Car SVG stage */
+    .car-stage {
+      position: absolute; bottom: 30%; left: -30%;
+      width: 280px; height: 120px;
+      animation: carRace 2.2s cubic-bezier(0.22,1,0.36,1) 0.3s forwards;
+    }
+    @keyframes carRace {
+      0%   { left: -30%; }
+      55%  { left: 35%; }
+      70%  { left: 32%; transform: rotate(-1.5deg); }  /* brake wobble */
+      82%  { left: 36%; transform: rotate(1deg); }
+      90%  { left: 34%; transform: rotate(0deg); }
+      100% { left: 34%; transform: rotate(0deg); }
+    }
+
+    /* Tyre smoke */
+    .smoke-wrap {
+      position: absolute; bottom: 28%; left: 33%;
+      opacity: 0;
+      animation: smokeAppear 0.4s ease 1.8s forwards;
+    }
+    @keyframes smokeAppear { to { opacity:1; } }
+    .smoke-puff {
+      position: absolute; border-radius: 50%;
+      background: rgba(200,220,230,0.18);
+      animation: puffOut 1.2s ease-out forwards;
+    }
+    @keyframes puffOut {
+      0%   { transform: scale(0.3); opacity: 0.5; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    /* Skid marks */
+    .skid-mark {
+      position: absolute; bottom: calc(30% + 8px);
+      height: 5px; border-radius: 2px;
+      background: rgba(80,40,20,0.6);
+      opacity: 0;
+      animation: skidIn 0.2s ease 1.75s forwards;
+    }
+    @keyframes skidIn { to { opacity: 1; } }
+
+    /* Logo above car */
+    .splash-logo-wrap {
+      position: relative; z-index: 2;
+      text-align: center; margin-bottom: 20px;
+      opacity: 0; transform: translateY(-20px);
+      animation: logoReveal 0.6s cubic-bezier(0.22,1,0.36,1) 1.9s both;
+    }
+    @keyframes logoReveal {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* City silhouette */
+    .splash-city {
+      position: absolute; bottom: 37%; left: 0; right: 0;
+      height: 120px; pointer-events: none;
+    }
+
+    /* Progress bar at bottom */
+    .splash-progress {
+      position: absolute; bottom: 0; left: 0; height: 3px;
+      background: var(--neon);
+      box-shadow: 0 0 12px var(--neon);
+      animation: progressLoad 2.6s cubic-bezier(0.4,0,0.2,1) 0.2s forwards;
+    }
+    @keyframes progressLoad { from{width:0} to{width:100%} }
+
+    .splash-tagline {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem; letter-spacing: 0.3em;
+      color: var(--muted); margin-top: 6px;
+      opacity: 0;
+      animation: logoReveal 0.4s ease 2.1s both;
+    }
+    .splash-enter {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.25em;
+      color: var(--neon); margin-top: 18px;
+      opacity: 0;
+      animation: blinkIn 0.5s ease 2.4s both, entryBlink 0.8s ease-in-out 2.9s infinite alternate;
+    }
+    @keyframes blinkIn { to { opacity:1; } }
+    @keyframes entryBlink { from{opacity:0.4} to{opacity:1} }
+
+    /* Headlight glow from car */
+    .headlight-beam {
+      position: absolute; bottom: calc(30% + 30px);
+      left: calc(34% + 255px);
+      width: 200px; height: 60px;
+      background: linear-gradient(90deg, rgba(255,255,220,0.35), transparent);
+      clip-path: polygon(0 30%,100% 0,100% 100%,0 70%);
+      opacity: 0;
+      animation: beamOn 0.3s ease 1.7s both;
+      pointer-events: none;
+    }
+    @keyframes beamOn { to { opacity:1; } }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* City skyline gradient */
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 100%, rgba(0,245,160,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 20% 80%, rgba(255,45,85,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 80% 70%, rgba(255,215,0,0.05) 0%, transparent 60%),
+        linear-gradient(180deg, #050a0e 0%, #071220 40%, #0a1a10 100%);
+    }
+
+    /* Animated city grid lines */
+    .grid-lines {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,245,160,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,245,160,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+    }
+
+    @keyframes gridMove {
+      0% { transform: perspective(500px) rotateX(30deg) translateY(0); }
+      100% { transform: perspective(500px) rotateX(30deg) translateY(60px); }
+    }
+
+    /* Floating particles */
+    .particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: var(--neon);
+      border-radius: 50%;
+      animation: float linear infinite;
+      opacity: 0;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-10vh) translateX(var(--dx, 50px)); opacity: 0; }
+    }
+
+    /* ── LOGO AREA ── */
+    .logo-area {
+      position: relative;
+      text-align: center;
+      z-index: 10;
+      animation: heroReveal 1.2s cubic-bezier(0.22,1,0.36,1) both;
+    }
+
+    @keyframes heroReveal {
+      0% { opacity: 0; transform: translateY(40px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .badge {
+      display: inline-block;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+      padding: 4px 16px;
+      margin-bottom: 20px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 8px var(--neon); }
+      50% { box-shadow: 0 0 20px var(--neon), 0 0 40px rgba(0,245,160,0.3); }
+    }
+
+    .main-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(4rem, 12vw, 10rem);
+      line-height: 0.9;
+      letter-spacing: 0.02em;
+      color: #fff;
+      text-shadow:
+        0 0 40px rgba(0,245,160,0.4),
+        0 0 80px rgba(0,245,160,0.15),
+        4px 4px 0 rgba(255,45,85,0.5);
+    }
+
+    .main-title span {
+      color: var(--neon);
+      display: block;
+    }
+
+    .subtitle {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+      letter-spacing: 0.25em;
+      color: var(--muted);
+      margin-top: 16px;
+      margin-bottom: 48px;
+      text-transform: uppercase;
+    }
+
+    /* ── CTA BUTTONS ── */
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      animation: heroReveal 1.4s cubic-bezier(0.22,1,0.36,1) 0.2s both;
+    }
+
+    .btn {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
+      padding: 14px 40px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.1);
+      transform: translateX(-100%);
+      transition: transform 0.3s;
+    }
+
+    .btn:hover::before { transform: translateX(0); }
+
+    .btn-primary {
+      background: var(--neon);
+      color: #050a0e;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,245,160,0.5);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0,245,160,0.1);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,245,160,0.2);
+    }
+
+    /* ── STATS STRIP ── */
+    .stats-strip {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 60px;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      background: rgba(5,10,14,0.8);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+      animation: heroReveal 1.6s cubic-bezier(0.22,1,0.36,1) 0.4s both;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2rem;
+      color: var(--neon);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* ── FEATURES SECTION ── */
+    .features {
+      padding: 80px 5%;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      color: #fff;
+      letter-spacing: 0.05em;
+    }
+
+    .section-title span { color: var(--neon); }
+
+    .section-sub {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      margin-top: 8px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+      clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+      /* Link reset */
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      cursor: pointer;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px;
+      height: 0;
+      background: var(--neon);
+      transition: height 0.4s;
+    }
+
+    .feature-card:hover::before { height: 100%; }
+
+    .feature-card:hover {
+      border-color: rgba(0,245,160,0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .feature-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      color: #fff;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .feature-cta {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--neon);
+      opacity: 0;
+      transform: translateX(-8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      border-top: 1px solid rgba(0,245,160,0.15);
+      padding-top: 12px;
+    }
+
+    .feature-card:hover .feature-cta {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* Animated corner accent on hover */
+    .feature-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; right: 0;
+      width: 0; height: 0;
+      border-style: solid;
+      border-width: 0 0 20px 20px;
+      border-color: transparent transparent rgba(0,245,160,0.2) transparent;
+      transition: border-width 0.3s ease;
+    }
+    .feature-card:hover::after {
+      border-width: 0 0 28px 28px;
+      border-color: transparent transparent rgba(0,245,160,0.4) transparent;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+    }
+
+    footer span { color: var(--neon); }
+  </style>
+</head>
+<body>
+
+  <!-- ── CAR SPLASH SCREEN ── -->
+  <div id="carSplash">
+    <!-- City silhouette SVG -->
+    <svg class="splash-city" viewBox="0 0 1200 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,120 L0,80 L20,80 L20,60 L30,60 L30,40 L40,40 L40,30 L50,30 L50,40 L60,40 L60,60 L70,60 L70,80
+               L80,80 L80,55 L90,55 L90,35 L100,35 L100,20 L105,20 L105,10 L110,10 L110,20 L115,20 L115,35 L120,35 L120,55
+               L130,55 L130,75 L140,75 L140,50 L150,50 L150,30 L160,30 L160,50 L170,50 L170,75
+               L180,75 L180,45 L185,45 L185,25 L190,25 L190,15 L200,15 L200,25 L205,25 L205,45 L215,45 L215,75
+               L230,75 L230,60 L240,60 L240,40 L250,40 L250,25 L260,25 L260,40 L270,40 L270,60 L280,60 L280,75
+               L300,75 L300,55 L310,55 L310,35 L315,35 L315,20 L325,20 L325,35 L330,35 L330,55 L340,55 L340,75
+               L360,75 L360,50 L370,50 L370,65 L380,65 L380,45 L390,45 L390,30 L400,30 L400,45 L410,45 L410,65 L420,65 L420,75
+               L450,75 L450,55 L460,55 L460,38 L470,38 L470,22 L475,22 L475,12 L480,12 L480,22 L485,22 L485,38 L495,38 L495,55 L505,55 L505,75
+               L530,75 L530,60 L540,60 L540,45 L555,45 L555,60 L565,60 L565,75
+               L590,75 L590,50 L600,50 L600,32 L610,32 L610,18 L615,18 L615,8 L620,8 L620,18 L625,18 L625,32 L635,32 L635,50 L645,50 L645,75
+               L670,75 L670,60 L680,60 L680,42 L690,42 L690,60 L700,60 L700,75
+               L730,75 L730,55 L740,55 L740,38 L748,38 L748,22 L758,22 L758,38 L765,38 L765,55 L775,55 L775,75
+               L800,75 L800,60 L810,60 L810,45 L820,45 L820,60 L830,60 L830,75
+               L860,75 L860,50 L870,50 L870,30 L880,30 L880,18 L890,18 L890,30 L900,30 L900,50 L910,50 L910,75
+               L940,75 L940,58 L950,58 L950,42 L960,42 L960,58 L970,58 L970,75
+               L1000,75 L1000,55 L1010,55 L1010,38 L1020,38 L1020,22 L1025,22 L1025,12 L1030,12 L1030,22 L1035,22 L1035,38 L1045,38 L1045,55 L1055,55 L1055,75
+               L1080,75 L1080,60 L1090,60 L1090,42 L1100,42 L1100,60 L1110,60 L1110,75
+               L1140,75 L1140,55 L1150,55 L1150,38 L1160,38 L1160,55 L1170,55 L1170,75
+               L1200,75 L1200,120 Z"
+        fill="rgba(10,21,32,0.95)" stroke="rgba(0,245,160,0.08)" stroke-width="1"/>
+      <!-- Window lights in buildings -->
+      <rect x="32" y="42" width="6" height="5" fill="rgba(255,215,0,0.3)"/>
+      <rect x="42" y="33" width="5" height="4" fill="rgba(0,245,160,0.25)"/>
+      <rect x="102" y="22" width="5" height="5" fill="rgba(255,215,0,0.4)"/>
+      <rect x="107" y="13" width="4" height="4" fill="rgba(0,180,255,0.3)"/>
+      <rect x="152" y="35" width="5" height="5" fill="rgba(255,45,85,0.3)"/>
+      <rect x="193" y="18" width="5" height="4" fill="rgba(255,215,0,0.35)"/>
+      <rect x="252" y="28" width="5" height="4" fill="rgba(0,245,160,0.3)"/>
+      <rect x="312" y="24" width="5" height="5" fill="rgba(255,215,0,0.4)"/>
+      <rect x="318" y="25" width="4" height="4" fill="rgba(0,245,160,0.2)"/>
+      <rect x="392" y="33" width="5" height="5" fill="rgba(255,45,85,0.25)"/>
+      <rect x="463" y="40" width="5" height="5" fill="rgba(255,215,0,0.35)"/>
+      <rect x="472" y="25" width="4" height="4" fill="rgba(0,180,255,0.3)"/>
+      <rect x="478" y="15" width="3" height="3" fill="rgba(255,215,0,0.5)"/>
+      <rect x="603" y="20" width="5" height="5" fill="rgba(0,245,160,0.4)"/>
+      <rect x="612" y="10" width="4" height="4" fill="rgba(255,215,0,0.5)"/>
+      <rect x="683" y="45" width="5" height="5" fill="rgba(255,45,85,0.3)"/>
+      <rect x="742" y="25" width="5" height="4" fill="rgba(255,215,0,0.35)"/>
+      <rect x="751" y="25" width="4" height="4" fill="rgba(0,245,160,0.25)"/>
+      <rect x="872" y="22" width="5" height="5" fill="rgba(255,215,0,0.4)"/>
+      <rect x="882" y="22" width="4" height="4" fill="rgba(0,180,255,0.3)"/>
+      <rect x="1022" y="25" width="5" height="5" fill="rgba(255,215,0,0.4)"/>
+      <rect x="1027" y="14" width="4" height="4" fill="rgba(0,245,160,0.3)"/>
+    </svg>
+
+    <!-- Road -->
+    <div class="splash-road">
+      <div class="road-edge top"></div>
+      <div class="road-dash"></div>
+      <div class="road-edge bot"></div>
+    </div>
+
+    <!-- Speed lines -->
+    <div class="splash-speed-wrap" id="speedLines"></div>
+
+    <!-- Skid marks -->
+    <div class="skid-mark" style="left:20%;width:14%;bottom:calc(30% + 10px)"></div>
+    <div class="skid-mark" style="left:20%;width:14%;bottom:calc(30% + 18px);opacity:0;animation:skidIn 0.2s ease 1.75s forwards"></div>
+
+    <!-- Headlight beam -->
+    <div class="headlight-beam"></div>
+
+    <!-- Car SVG -->
+    <div class="car-stage" id="carStage">
+      <svg viewBox="0 0 280 110" xmlns="http://www.w3.org/2000/svg" width="280" height="110">
+        <defs>
+          <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a3a50"/>
+            <stop offset="50%" stop-color="#0d2030"/>
+            <stop offset="100%" stop-color="#050a0e"/>
+          </linearGradient>
+          <linearGradient id="roofGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1e4060"/>
+            <stop offset="100%" stop-color="#0a1a28"/>
+          </linearGradient>
+          <linearGradient id="neonUnder" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="transparent"/>
+            <stop offset="20%" stop-color="#00f5a0"/>
+            <stop offset="80%" stop-color="#00f5a0"/>
+            <stop offset="100%" stop-color="transparent"/>
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="strongGlow">
+            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- Shadow under car -->
+        <ellipse cx="140" cy="98" rx="105" ry="8" fill="rgba(0,0,0,0.5)"/>
+
+        <!-- Neon underglow -->
+        <rect x="45" y="90" width="195" height="3" rx="1.5" fill="url(#neonUnder)" opacity="0.8" filter="url(#glow)"/>
+
+        <!-- Main body -->
+        <path d="M30,85 L30,60 Q32,55 40,52 L80,52 Q100,30 140,28 Q180,26 200,52 L240,52 Q250,55 252,60 L252,85 Z"
+              fill="url(#bodyGrad)" stroke="#1a3a55" stroke-width="1"/>
+
+        <!-- Roof / cabin -->
+        <path d="M82,52 Q102,30 140,27 Q178,25 198,52 Z"
+              fill="url(#roofGrad)" stroke="#1e4060" stroke-width="0.8"/>
+
+        <!-- Windshield -->
+        <path d="M120,52 Q130,34 150,32 Q168,30 178,52 Z"
+              fill="rgba(0,200,255,0.12)" stroke="rgba(0,200,255,0.3)" stroke-width="0.8"/>
+
+        <!-- Rear window -->
+        <path d="M86,52 Q98,38 118,34 L120,52 Z"
+              fill="rgba(0,200,255,0.08)" stroke="rgba(0,200,255,0.2)" stroke-width="0.7"/>
+
+        <!-- Side window -->
+        <path d="M180,52 Q194,40 200,52 Z"
+              fill="rgba(0,200,255,0.08)" stroke="rgba(0,200,255,0.2)" stroke-width="0.7"/>
+
+        <!-- Hood stripe (neon green) -->
+        <rect x="200" y="62" width="45" height="3" rx="1.5" fill="var(--neon, #00f5a0)" opacity="0.7" filter="url(#glow)"/>
+
+        <!-- Door line -->
+        <line x1="135" y1="52" x2="135" y2="85" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+
+        <!-- Side body line / crease -->
+        <path d="M35,70 Q100,65 250,70" stroke="rgba(0,245,160,0.15)" stroke-width="1" fill="none"/>
+
+        <!-- Rear bumper / diffuser -->
+        <rect x="28" y="80" width="30" height="6" rx="2" fill="#0a1a25" stroke="#1a3040" stroke-width="0.8"/>
+        <rect x="30" y="82" width="8" height="3" rx="1" fill="rgba(255,45,85,0.6)" filter="url(#glow)"/>
+        <rect x="40" y="82" width="4" height="3" rx="1" fill="rgba(255,45,85,0.4)"/>
+
+        <!-- Taillights -->
+        <rect x="28" y="56" width="12" height="18" rx="2" fill="rgba(255,45,85,0.15)" stroke="#ff2d55" stroke-width="1"/>
+        <rect x="30" y="58" width="8" height="7" rx="1" fill="#ff2d55" opacity="0.9" filter="url(#glow)"/>
+        <rect x="30" y="67" width="8" height="5" rx="1" fill="rgba(255,45,85,0.5)"/>
+
+        <!-- Front bumper -->
+        <rect x="240" y="78" width="18" height="8" rx="3" fill="#0d2030" stroke="#1a3a50" stroke-width="0.8"/>
+
+        <!-- Headlights -->
+        <rect x="244" y="56" width="14" height="18" rx="2" fill="rgba(255,255,200,0.15)" stroke="#ffd700" stroke-width="1"/>
+        <rect x="246" y="58" width="10" height="7" rx="1" fill="rgba(255,255,220,0.9)" filter="url(#strongGlow)"/>
+        <rect x="246" y="67" width="10" height="5" rx="1" fill="rgba(255,200,100,0.6)"/>
+        <!-- DRL strip -->
+        <rect x="244" y="74" width="16" height="2" rx="1" fill="rgba(0,245,160,0.8)" filter="url(#glow)"/>
+
+        <!-- Front spoiler -->
+        <path d="M230,85 L258,85 L260,88 L228,88 Z" fill="#0a1520" stroke="rgba(0,245,160,0.3)" stroke-width="0.8"/>
+
+        <!-- Wheels -->
+        <!-- Rear wheel -->
+        <circle cx="78" cy="90" r="17" fill="#080d12" stroke="#1a3040" stroke-width="1.5"/>
+        <circle cx="78" cy="90" r="13" fill="#0d1820" stroke="#243848" stroke-width="1"/>
+        <!-- Rim spokes -->
+        <line x1="78" y1="77" x2="78" y2="103" stroke="#2a4860" stroke-width="2"/>
+        <line x1="65" y1="90" x2="91" y2="90" stroke="#2a4860" stroke-width="2"/>
+        <line x1="69" y1="81" x2="87" y2="99" stroke="#2a4860" stroke-width="1.5"/>
+        <line x1="87" y1="81" x2="69" y2="99" stroke="#2a4860" stroke-width="1.5"/>
+        <circle cx="78" cy="90" r="4" fill="#1a3040" stroke="rgba(0,245,160,0.4)" stroke-width="1.5"/>
+        <circle cx="78" cy="90" r="2" fill="var(--neon, #00f5a0)" opacity="0.6"/>
+        <!-- Rear brake caliper glow -->
+        <rect x="70" y="87" width="6" height="6" rx="1" fill="rgba(255,45,85,0.3)"/>
+
+        <!-- Front wheel -->
+        <circle cx="202" cy="90" r="17" fill="#080d12" stroke="#1a3040" stroke-width="1.5"/>
+        <circle cx="202" cy="90" r="13" fill="#0d1820" stroke="#243848" stroke-width="1"/>
+        <line x1="202" y1="77" x2="202" y2="103" stroke="#2a4860" stroke-width="2"/>
+        <line x1="189" y1="90" x2="215" y2="90" stroke="#2a4860" stroke-width="2"/>
+        <line x1="193" y1="81" x2="211" y2="99" stroke="#2a4860" stroke-width="1.5"/>
+        <line x1="211" y1="81" x2="193" y2="99" stroke="#2a4860" stroke-width="1.5"/>
+        <circle cx="202" cy="90" r="4" fill="#1a3040" stroke="rgba(0,245,160,0.4)" stroke-width="1.5"/>
+        <circle cx="202" cy="90" r="2" fill="var(--neon, #00f5a0)" opacity="0.6"/>
+        <rect x="194" y="87" width="6" height="6" rx="1" fill="rgba(255,45,85,0.2)"/>
+
+        <!-- Antenna -->
+        <line x1="180" y1="27" x2="175" y2="10" stroke="rgba(0,245,160,0.4)" stroke-width="1.2"/>
+        <circle cx="175" cy="9" r="2" fill="var(--neon,#00f5a0)" opacity="0.8" filter="url(#glow)"/>
+
+        <!-- Logo on door -->
+        <text x="138" y="72" font-family="Bebas Neue,sans-serif" font-size="9" fill="rgba(0,245,160,0.5)" letter-spacing="2">LSC</text>
+      </svg>
+    </div>
+
+    <!-- Smoke puffs -->
+    <div class="smoke-wrap" id="smokeWrap">
+      <div class="smoke-puff" style="width:30px;height:30px;left:-15px;top:-15px;animation-delay:0s"></div>
+      <div class="smoke-puff" style="width:24px;height:24px;left:-8px;top:-25px;animation-delay:0.15s"></div>
+      <div class="smoke-puff" style="width:20px;height:20px;left:-30px;top:-10px;animation-delay:0.3s"></div>
+    </div>
+
+    <!-- Logo reveal -->
+    <div class="splash-logo-wrap">
+      <!-- SVG Logo -->
+      <svg width="320" height="90" viewBox="0 0 320 90" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00f5a0"/>
+            <stop offset="50%" stop-color="#00d4ff"/>
+            <stop offset="100%" stop-color="#00f5a0"/>
+          </linearGradient>
+          <filter id="logoGlow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="textGlow">
+            <feGaussianBlur stdDeviation="2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- Hexagon badge -->
+        <polygon points="44,5 75,5 90,30 75,55 44,55 29,30"
+                 fill="rgba(0,245,160,0.08)" stroke="url(#logoGrad)" stroke-width="2" filter="url(#logoGlow)"/>
+        <!-- Inner hex -->
+        <polygon points="48,12 71,12 83,30 71,48 48,48 36,30"
+                 fill="none" stroke="rgba(0,245,160,0.3)" stroke-width="1"/>
+        <!-- Star / crosshair inside hex -->
+        <line x1="59" y1="12" x2="59" y2="48" stroke="rgba(0,245,160,0.5)" stroke-width="1.5" filter="url(#logoGlow)"/>
+        <line x1="29" y1="30" x2="90" y2="30" stroke="rgba(0,245,160,0.5)" stroke-width="1.5" filter="url(#logoGlow)"/>
+        <circle cx="59" cy="30" r="6" fill="rgba(0,245,160,0.2)" stroke="#00f5a0" stroke-width="2" filter="url(#logoGlow)"/>
+        <circle cx="59" cy="30" r="2.5" fill="#00f5a0" filter="url(#logoGlow)"/>
+        <!-- Speed lines inside hex -->
+        <line x1="36" y1="22" x2="82" y2="22" stroke="rgba(0,245,160,0.2)" stroke-width="1"/>
+        <line x1="36" y1="38" x2="82" y2="38" stroke="rgba(0,245,160,0.2)" stroke-width="1"/>
+
+        <!-- Main text: LOS SANTOS -->
+        <text x="100" y="35" font-family="Bebas Neue,sans-serif" font-size="32" fill="white" letter-spacing="4" filter="url(#textGlow)">LOS SANTOS</text>
+        <!-- Subtext: COMMAND -->
+        <text x="100" y="52" font-family="Bebas Neue,sans-serif" font-size="18" fill="url(#logoGrad)" letter-spacing="10" filter="url(#textGlow)">COMMAND</text>
+
+        <!-- Bottom rule line with triangles -->
+        <line x1="100" y1="58" x2="318" y2="58" stroke="rgba(0,245,160,0.3)" stroke-width="1"/>
+        <polygon points="100,55 108,58 100,61" fill="rgba(0,245,160,0.5)"/>
+        <polygon points="318,55 310,58 318,61" fill="rgba(0,245,160,0.5)"/>
+
+        <!-- Version badge -->
+        <rect x="242" y="63" width="74" height="16" rx="2" fill="rgba(0,245,160,0.08)" stroke="rgba(0,245,160,0.3)" stroke-width="1"/>
+        <text x="279" y="74" font-family="Share Tech Mono,monospace" font-size="8" fill="rgba(0,245,160,0.7)" text-anchor="middle" letter-spacing="2">v2.5 CLASSIFIED</text>
+      </svg>
+      <div class="splash-tagline">// CRIMINAL INTELLIGENCE PLATFORM //</div>
+      <div class="splash-enter" id="splashEnter">▶ CLICK ANYWHERE TO ENTER</div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="splash-progress" id="splashProgress"></div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="grid-lines"></div>
+
+    <!-- Particles (JS generated) -->
+    <div id="particles"></div>
+
+    <div class="logo-area">
+      <div class="badge">⬡ CLASSIFIED SYSTEM — AUTHORIZED PERSONNEL ONLY ⬡</div>
+      <h1 class="main-title">
+        LOS SANTOS
+        <span>COMMAND</span>
+      </h1>
+      <p class="subtitle">// Crime Control Dashboard — v2.5 //</p>
+      <div class="cta-group">
+        <a href="/dashboard" class="btn btn-primary">▶ Enter Command Center</a>
+        <a href="/login" class="btn btn-secondary">⬡ Operator Login</a>
+      </div>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-value" id="counter1">0</div>
+        <div class="stat-label">Active Operators</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="counter2">0</div>
+        <div class="stat-label">Missions Logged</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="counter3">$0</div>
+        <div class="stat-label">Total Earnings</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="counter4">0%</div>
+        <div class="stat-label">City Influence</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features">
+    <div class="section-header">
+      <h2 class="section-title">YOUR <span>EMPIRE</span> AWAITS</h2>
+      <p class="section-sub">// FULL SPECTRUM CRIMINAL INTELLIGENCE PLATFORM //</p>
+    </div>
+    <div class="feature-grid">
+      <a class="feature-card" href="/dashboard#map-section" title="Open Territory Map">
+        <span class="feature-icon">📡</span>
+        <div class="feature-title">Live Territory Map</div>
+        <p class="feature-desc">Real-time GPS tracking of high-value targets. Monitor operation zones, safehouses, and heat areas across Los Santos.</p>
+        <div class="feature-cta">OPEN MAP →</div>
+      </a>
+      <a class="feature-card" href="/dashboard#analytics" title="Open Analytics HQ">
+        <span class="feature-icon">💰</span>
+        <div class="feature-title">Earnings Intelligence</div>
+        <p class="feature-desc">Track cash flow, revenue trends, and empire growth. Know exactly how much each operation contributes to your bottom line.</p>
+        <div class="feature-cta">VIEW ANALYTICS →</div>
+      </a>
+      <a class="feature-card" href="/dashboard#overview" title="Open Command Overview">
+        <span class="feature-icon">🔥</span>
+        <div class="feature-title">Heat Management</div>
+        <p class="feature-desc">Monitor law enforcement pressure in real-time. Heat decays when you lay low — but spikes fast when you go loud.</p>
+        <div class="feature-cta">MONITOR HEAT →</div>
+      </a>
+      <a class="feature-card" href="/dashboard#missions" title="Open Mission Planner">
+        <span class="feature-icon">🎯</span>
+        <div class="feature-title">Mission Planner</div>
+        <p class="feature-desc">Plan heists, deliveries, and surveillance ops. AI-powered heat prediction tells you the cost before you commit.</p>
+        <div class="feature-cta">PLAN MISSIONS →</div>
+      </a>
+      <a class="feature-card" href="/dashboard#empire" title="Open Empire Status">
+        <span class="feature-icon">👑</span>
+        <div class="feature-title">Empire Progression</div>
+        <p class="feature-desc">Rise from Street Hustler → Kingpin → Los Santos Legend. Every mission builds your criminal legacy.</p>
+        <div class="feature-cta">VIEW EMPIRE →</div>
+      </a>
+      <a class="feature-card" href="/dashboard#leaderboard" title="Open Leaderboard">
+        <span class="feature-icon">📊</span>
+        <div class="feature-title">Analytics Command</div>
+        <p class="feature-desc">Trend charts, mission success rates, wanted-level history. Data-driven crime at its finest.</p>
+        <div class="feature-cta">VIEW RANKINGS →</div>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <p>LOS SANTOS COMMAND CENTER &nbsp;|&nbsp; <span>CLASSIFIED SYSTEM</span> &nbsp;|&nbsp; ALL OPERATIONS ARE FICTIONAL</p>
+  </footer>
+
+  <script>
+    /* ── SOUND ENGINE ── */
+    let audioCtx = null;
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Resume if suspended (browsers require user gesture before audio plays)
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function playTone(freq, type='sine', dur=0.1, vol=0.07, delay=0) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = type; osc.frequency.value = freq;
+        const t = ctx.currentTime + delay;
+        gain.gain.setValueAtTime(0.001, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.start(t); osc.stop(t + dur);
+      } catch(e) {}
+    }
+
+    /* Create context early (suspended) so it's ready when user first touches screen */
+    let soundsTriggered = false;
+    function triggerSplashSounds() {
+      if (soundsTriggered) return;
+      soundsTriggered = true;
+      // Resume the context (satisfies autoplay policy)
+      if (audioCtx) audioCtx.resume();
+      else audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      /*  SOUND TIMELINE synced to car animation (2.2s race, starts at 0.3s):
+          0.00s  ignition crank
+          0.28s  launch screech (wheelspin as car launches)
+          0.32s  engine rev climbs during acceleration + 2 gear pops
+          1.75s  brake screech — sustained squeal as car locks wheels
+          1.88s  chassis thud — body impact as car jolts to stop
+          1.95s  engine idle settles
+          2.05s  logo power-on sweep
+      */
+      setTimeout(() => playIgnition(),         0);
+      setTimeout(() => playLaunchScreech(),  280);
+      setTimeout(() => playEngineRev(0),     320);
+      setTimeout(() => playBrakeScreech(),  1750);
+      setTimeout(() => playChassisThud(),   1880);
+      setTimeout(() => playEngineIdle(0.06),1950);
+      setTimeout(() => playLogoPowerOn(),   2050);
+    }
+
+    /* ── NOISE BUFFER FACTORY ── */
+    function makeNoiseBuf(ctx, dur) {
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return buf;
+    }
+
+    /* ── 1. IGNITION CRANK (0.0 s) ──
+       Short starter-motor rattle before engine catches */
+    function playIgnition() {
+      try {
+        const ctx = getAudio();
+        const buf = makeNoiseBuf(ctx, 0.35);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const bp  = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 280; bp.Q.value = 4;
+        const g   = ctx.createGain();
+        g.gain.setValueAtTime(0.001, ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + 0.05);
+        g.gain.setValueAtTime(0.28, ctx.currentTime + 0.15);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        src.start(); src.stop(ctx.currentTime + 0.36);
+        /* Starter whine tone */
+        const w = ctx.createOscillator(); w.type = 'sawtooth';
+        w.frequency.setValueAtTime(180, ctx.currentTime);
+        w.frequency.linearRampToValueAtTime(320, ctx.currentTime + 0.3);
+        const wg = ctx.createGain();
+        wg.gain.setValueAtTime(0.001, ctx.currentTime);
+        wg.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.05);
+        wg.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        w.connect(wg); wg.connect(ctx.destination);
+        w.start(); w.stop(ctx.currentTime + 0.36);
+      } catch(e) {}
+    }
+
+    /* ── 2. ENGINE RUMBLE + REVVING (0.3 s → 1.6 s) ──
+       Three layered sawtooth oscillators that ramp up in pitch
+       simulating the car accelerating across the screen */
+    function playEngineRev(startDelay = 0) {
+      /* Low subsonic thump — body resonance */
+      try {
+        const ctx = getAudio();
+        const buf = makeNoiseBuf(ctx, 1.6);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const lp  = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 120;
+        const g   = ctx.createGain();
+        const t0  = ctx.currentTime + startDelay;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.5, t0 + 0.12);
+        g.gain.linearRampToValueAtTime(0.55, t0 + 1.0);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
+        src.connect(lp); lp.connect(g); g.connect(ctx.destination);
+        src.start(t0); src.stop(t0 + 1.65);
+      } catch(e) {}
+
+      /* Three harmonic engine tones — rev sweep */
+      [[65, 2.8], [130, 2.4], [195, 2.0]].forEach(([base, mult], i) => {
+        try {
+          const ctx = getAudio();
+          const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+          const t0  = ctx.currentTime + startDelay + i * 0.04;
+          osc.frequency.setValueAtTime(base, t0);
+          osc.frequency.linearRampToValueAtTime(base * mult, t0 + 1.3);  /* pitch climbs as car accelerates */
+          osc.frequency.linearRampToValueAtTime(base * mult * 0.7, t0 + 1.6); /* brief lift before brake */
+          const g = ctx.createGain();
+          const vol = [0.12, 0.08, 0.05][i];
+          g.gain.setValueAtTime(0.001, t0);
+          g.gain.linearRampToValueAtTime(vol, t0 + 0.18);
+          g.gain.linearRampToValueAtTime(vol, t0 + 1.1);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.65);
+          /* Slight distortion via waveshaper */
+          const ws = ctx.createWaveShaper();
+          const curve = new Float32Array(256);
+          for (let j = 0; j < 256; j++) {
+            const x = (j * 2) / 256 - 1;
+            curve[j] = (Math.PI + 80) * x / (Math.PI + 80 * Math.abs(x));
+          }
+          ws.curve = curve;
+          osc.connect(ws); ws.connect(g); g.connect(ctx.destination);
+          osc.start(t0); osc.stop(t0 + 1.7);
+        } catch(e) {}
+      });
+
+      /* Gear-shift pops at ~0.5 s and ~1.0 s */
+      [0.48, 0.95].forEach(shift => {
+        try {
+          const ctx = getAudio();
+          const buf = makeNoiseBuf(ctx, 0.08);
+          const src = ctx.createBufferSource(); src.buffer = buf;
+          const bp  = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 3;
+          const g   = ctx.createGain();
+          const t0  = ctx.currentTime + startDelay + shift;
+          g.gain.setValueAtTime(0.001, t0);
+          g.gain.linearRampToValueAtTime(0.22, t0 + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+          src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+          src.start(t0); src.stop(t0 + 0.09);
+        } catch(e) {}
+      });
+    }
+
+    /* ── 3. TYRE SCREECH ON LAUNCH (0.3 s) ──
+       Wheelspin squeal at the very start of acceleration */
+    function playLaunchScreech(delay = 0) {
+      try {
+        const ctx = getAudio();
+        const buf = makeNoiseBuf(ctx, 0.5);
+        const d   = buf.getChannelData(0);
+        /* Fade-out envelope baked into the buffer for the squeal */
+        for (let i = 0; i < d.length; i++) d[i] *= Math.pow(1 - i / d.length, 1.2);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const hp  = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2800;
+        const bp  = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 4200; bp.Q.value = 3;
+        const g   = ctx.createGain();
+        const t0  = ctx.currentTime + delay;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.5, t0 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.48);
+        src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        src.start(t0); src.stop(t0 + 0.52);
+        /* Harmonic squeal overtone */
+        const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(3200, t0);
+        osc.frequency.linearRampToValueAtTime(2600, t0 + 0.45);
+        const og = ctx.createGain();
+        og.gain.setValueAtTime(0.001, t0);
+        og.gain.linearRampToValueAtTime(0.06, t0 + 0.04);
+        og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.45);
+        osc.connect(og); og.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + 0.46);
+      } catch(e) {}
+    }
+
+    /* ── 4. BRAKING SCREECH + SKID (1.75 s) ──
+       Long sustained screech as car locks brakes and slides */
+    function playBrakeScreech(delay = 0) {
+      try {
+        const ctx = getAudio();
+        /* Main screech noise */
+        const buf = makeNoiseBuf(ctx, 0.9);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const hp  = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3500;
+        const bp  = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 7000; bp.Q.value = 2.5;
+        const g   = ctx.createGain();
+        const t0  = ctx.currentTime + delay;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.55, t0 + 0.03);
+        g.gain.setValueAtTime(0.55, t0 + 0.5);        /* sustained screech */
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.88);
+        src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        src.start(t0); src.stop(t0 + 0.92);
+
+        /* Pitch-dropping screech tone — characteristic brake squeal */
+        const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(5800, t0);
+        osc.frequency.exponentialRampToValueAtTime(3200, t0 + 0.85); /* pitch drops as car slows */
+        const og = ctx.createGain();
+        og.gain.setValueAtTime(0.001, t0);
+        og.gain.linearRampToValueAtTime(0.09, t0 + 0.04);
+        og.gain.setValueAtTime(0.09, t0 + 0.45);
+        og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.86);
+        osc.connect(og); og.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + 0.88);
+
+        /* Second harmonic layer for richness */
+        const osc2 = ctx.createOscillator(); osc2.type = 'square';
+        osc2.frequency.setValueAtTime(2900, t0 + 0.05);
+        osc2.frequency.exponentialRampToValueAtTime(1800, t0 + 0.8);
+        const og2 = ctx.createGain();
+        og2.gain.setValueAtTime(0.001, t0 + 0.05);
+        og2.gain.linearRampToValueAtTime(0.04, t0 + 0.1);
+        og2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.82);
+        osc2.connect(og2); og2.connect(ctx.destination);
+        osc2.start(t0 + 0.05); osc2.stop(t0 + 0.84);
+      } catch(e) {}
+    }
+
+    /* ── 5. CHASSIS THUD (1.85 s) ──
+       Heavy suspension/body impact as car jolts to a stop */
+    function playChassisThud(delay = 0) {
+      playTone(48,  'sine',     0.35, 0.40, delay);
+      playTone(80,  'sawtooth', 0.20, 0.18, delay + 0.02);
+      playTone(32,  'sine',     0.45, 0.35, delay);
+      /* Metal clank transient */
+      try {
+        const ctx = getAudio();
+        const buf = makeNoiseBuf(ctx, 0.12);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const bp  = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 8;
+        const g   = ctx.createGain();
+        const t0  = ctx.currentTime + delay;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.18, t0 + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+        src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        src.start(t0); src.stop(t0 + 0.13);
+      } catch(e) {}
+    }
+
+    /* ── 6. ENGINE IDLE (1.9 s → dismiss) ──
+       Low steady idle rumble after the car stops */
+    let idleNodes = [];
+    function playEngineIdle(delay = 0) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(52, ctx.currentTime + delay);
+        /* Subtle idle fluctuation */
+        const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 3.5;
+        const lfoG = ctx.createGain(); lfoG.gain.value = 4;
+        lfo.connect(lfoG); lfoG.connect(osc.frequency);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+        g.gain.linearRampToValueAtTime(0.10, ctx.currentTime + delay + 0.25);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        lfo.start(ctx.currentTime + delay);
+        idleNodes = [osc, lfo, g];  /* store so we can fade out on dismiss */
+      } catch(e) {}
+    }
+
+    function stopEngineIdle() {
+      try {
+        const ctx = getAudio();
+        const [osc, lfo, g] = idleNodes;
+        if (!osc) return;
+        g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.stop(ctx.currentTime + 0.55);
+        lfo.stop(ctx.currentTime + 0.55);
+        idleNodes = [];
+      } catch(e) {}
+    }
+
+    /* ── 7. LOGO POWER-ON ── */
+    function playLogoPowerOn(delay = 0) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator(); osc.type = 'sine';
+        osc.frequency.setValueAtTime(80, ctx.currentTime + delay);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + delay + 0.5);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+        g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + delay + 0.1);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.6);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.7);
+      } catch(e) {}
+      [523, 659, 784].forEach((f, i) => playTone(f, 'sine', 0.12, 0.07, delay + 0.4 + i * 0.08));
+    }
+
+    /* ── SPEED LINES GENERATOR ── */
+    function generateSpeedLines() {
+      const wrap = document.getElementById('speedLines');
+      if (!wrap) return;
+      for (let i = 0; i < 22; i++) {
+        const line = document.createElement('div');
+        const y = Math.random() * 70 + 5;
+        const w = 60 + Math.random() * 200;
+        const opacity = 0.05 + Math.random() * 0.2;
+        const dur = 0.2 + Math.random() * 0.3;
+        const delay = Math.random() * 2;
+        line.className = 'speed-line';
+        line.style.cssText = `
+          top:${y}%; right:${Math.random() * 30}%;
+          width:${w}px; opacity:${opacity};
+          animation: speedLineAnim ${dur}s linear ${delay}s infinite;
+        `;
+        wrap.appendChild(line);
+      }
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes speedLineAnim {
+          0%   { transform: scaleX(1.5); opacity: 0.2; }
+          50%  { opacity: 0.15; }
+          100% { transform: scaleX(0.1); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    /* ── WHEEL SPIN ANIMATION ── */
+    function animateWheels() {
+      const car = document.getElementById('carStage');
+      if (!car) return;
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes wheelSpin {
+          from { transform-origin: center; transform: rotate(0deg); }
+          to   { transform-origin: center; transform: rotate(-360deg); }
+        }
+        #carStage circle[cx="78"][cy="90"][r="13"],
+        #carStage circle[cx="202"][cy="90"][r="13"] {
+          animation: wheelSpin 0.18s linear infinite;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    /* ── MAIN SPLASH LOGIC ── */
+    let splashDone = false;
+    function dismissSplash() {
+      if (splashDone) return;
+      splashDone = true;
+      stopEngineIdle();
+      const splash = document.getElementById('carSplash');
+      splash.classList.add('hide');
+      setTimeout(() => { splash.style.display = 'none'; }, 800);
+    }
+
+    window.addEventListener('load', () => {
+      generateSpeedLines();
+      animateWheels();
+
+      const splash = document.getElementById('carSplash');
+
+      // Sounds fire on the very first click/touch on the splash screen.
+      // This satisfies browser autoplay policy (requires a real user gesture).
+      // The full sound timeline starts from that moment.
+      splash.addEventListener('click',      () => triggerSplashSounds(), { once: true });
+      splash.addEventListener('touchstart', () => triggerSplashSounds(), { once: true });
+
+      /* Auto-dismiss after 5.5s */
+      setTimeout(() => dismissSplash(), 5500);
+
+      /* Click to dismiss after 2.2s (car has stopped) */
+      setTimeout(() => {
+        splash.addEventListener('click', dismissSplash);
+        splash.style.cursor = 'pointer';
+      }, 2200);
+    });
+
+    // ── PARTICLES ──
+    const container = document.getElementById('particles');
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.cssText = `
+        left: ${Math.random() * 100}%;
+        animation-duration: ${6 + Math.random() * 10}s;
+        animation-delay: ${Math.random() * 10}s;
+        --dx: ${(Math.random() - 0.5) * 100}px;
+        width: ${Math.random() > 0.5 ? 2 : 1}px;
+        height: ${Math.random() > 0.5 ? 2 : 1}px;
+        background: ${Math.random() > 0.7 ? '#ffd700' : '#00f5a0'};
+      `;
+      container.appendChild(p);
+    }
+
+    // ── ANIMATED COUNTERS ──
+    function animateCounter(el, target, prefix='', suffix='', duration=2000) {
+      let start = 0;
+      const step = target / (duration / 16);
+      const timer = setInterval(() => {
+        start += step;
+        if (start >= target) { start = target; clearInterval(timer); }
+        el.textContent = prefix + Math.floor(start).toLocaleString() + suffix;
+      }, 16);
+    }
+
+    // Fetch real stats from the leaderboard API to populate the landing page counters
+    async function loadLandingStats() {
+      try {
+        const res = await fetch('/api/leaderboard', { credentials: 'include' });
+        if (!res.ok) throw new Error('not ok');
+        const data = await res.json();
+
+        // Aggregate real numbers from the leaderboard
+        const operators       = data.length;
+        const missionsLogged  = data.reduce((s, u) => s + (u.missions_completed || 0), 0);
+        const totalEarnings   = data.reduce((s, u) => s + (u.cash || 0), 0);
+        const avgInfluence    = operators > 0
+          ? Math.round(data.reduce((s, u) => s + (u.territory || 0), 0) / operators)
+          : 0;
+
+        animateCounter(document.getElementById('counter1'), operators);
+        animateCounter(document.getElementById('counter2'), missionsLogged);
+        animateCounter(document.getElementById('counter3'), totalEarnings, '$');
+        animateCounter(document.getElementById('counter4'), avgInfluence, '', '%');
+      } catch(e) {
+        // Not logged in or API unavailable — show dashes instead of fake numbers
+        ['counter1','counter2','counter3','counter4'].forEach((id, i) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = ['—', '—', '—', '—'][i];
+        });
+      }
+    }
+
+    setTimeout(() => loadLandingStats(), 600);
+  </script>
+</body>
+</html>

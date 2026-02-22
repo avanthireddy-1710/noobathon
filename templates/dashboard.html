@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Command Center — Los Santos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <!-- Anti-flash: enforce dark theme BEFORE first paint so there's never a white flash -->
+  <script>
+    (function() {
+      if (localStorage.getItem('lsTheme') !== 'light') {
+        // Remove any light-mode that might be lingering, lock dark
+        document.documentElement.style.background = '#050a0e';
+        document.documentElement.style.colorScheme = 'dark';
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --neon: #00f5a0; --neon2: #ffd700; --red: #ff2d55; --blue: #00b4ff;
+      --bg: #050a0e; --card: #0a1520; --card2: #0d1c2e; --border: #1a3040;
+      --text: #c8d8e0; --muted: #4a6070; --sidebar: 260px;
+      --transition-speed: 0.3s;
+    }
+    /* ── LIGHT MODE ── */
+    body.light-mode {
+      --neon: #ff2d9a; --neon2: #e0a000; --red: #cc1144; --blue: #0080cc;
+      --bg: #f0f4f8; --card: #ffffff; --card2: #f8fafc; --border: #d0dce8;
+      --text: #1a2a3a; --muted: #6a8090;
+    }
+    body.light-mode::before {
+      background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif;
+      display:flex; min-height:100vh; overflow-x:hidden;
+      transition: background var(--transition-speed), color var(--transition-speed);
+    }
+    body::before { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px); pointer-events:none; z-index:999; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width:var(--sidebar); background:var(--card); border-right:1px solid var(--border);
+      display:flex; flex-direction:column; position:fixed; top:0; left:0; height:100vh;
+      z-index:100; overflow:hidden;
+      transition: background var(--transition-speed), border-color var(--transition-speed);
+    }
+    .sidebar-brand { padding:24px 20px; border-bottom:1px solid var(--border); font-family:'Bebas Neue',sans-serif; }
+    .brand-sub  { font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:0.2em; color:var(--neon); }
+    .brand-name { font-size:1.5rem; color:#fff; letter-spacing:0.08em; line-height:1; }
+    .brand-tag  { font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--muted); }
+
+    .sidebar-nav { flex:1; padding:16px 0; overflow-y:auto; }
+    .nav-section { padding:8px 20px 4px; font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:0.2em; color:var(--muted); }
+    .nav-item {
+      display:flex; align-items:center; gap:12px; padding:11px 20px;
+      cursor:pointer; transition:all 0.2s; border-left:3px solid transparent;
+      font-size:0.95rem; font-weight:600; letter-spacing:0.05em; color:var(--muted);
+      user-select:none;
+    }
+    .nav-item:hover  { background:rgba(0,245,160,0.05); color:var(--text); transform: translateX(4px); }
+    .nav-item.active { border-left-color:var(--neon); background:rgba(0,245,160,0.08); color:var(--neon); }
+    .nav-icon { font-size:1rem; width:20px; text-align:center; transition: transform 0.2s; }
+    .nav-item:hover .nav-icon { transform: scale(1.2); }
+
+    .sidebar-user {
+      padding:16px 20px; border-top:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+    }
+    .user-info { display:flex; align-items:center; gap:10px; min-width:0; }
+    .user-avatar {
+      width:32px; height:32px; background:var(--neon); color:#050a0e; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Bebas Neue',sans-serif; font-size:1rem;
+      clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+    }
+    .user-name  { font-size:0.85rem; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .user-tier  { font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--neon); }
+    .logout-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; transition:color 0.2s; flex-shrink:0; }
+    .logout-btn:hover { color:var(--red); }
+
+    /* ── MAIN ── */
+    .main { margin-left:var(--sidebar); flex:1; padding:24px; min-height:100vh; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+    .page-title { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; color:#fff; letter-spacing:0.08em; }
+    .page-sub   { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--muted); }
+    .topbar-right { display:flex; align-items:center; gap:12px; }
+    .live-badge {
+      display:flex; align-items:center; gap:6px;
+      font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:0.15em;
+      color:var(--neon); border:1px solid var(--neon); padding:4px 12px;
+    }
+    .live-dot { width:6px; height:6px; background:var(--neon); border-radius:50%; animation:blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── SECTIONS ── */
+    .section { display:none; }
+    .section.active { display:block; animation: sectionIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes sectionIn {
+      from { opacity:0; transform: translateY(16px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+
+    /* ── STAT CARDS ── */
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .stat-card {
+      background:var(--card); border:1px solid var(--border); padding:20px;
+      clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+      position:relative; overflow:hidden; transition:all 0.3s cubic-bezier(0.22,1,0.36,1);
+      cursor:pointer;
+    }
+    .stat-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; }
+    .stat-card.green::before { background:var(--neon); }
+    .stat-card.gold::before  { background:var(--neon2); }
+    .stat-card.red::before   { background:var(--red); }
+    .stat-card.blue::before  { background:var(--blue); }
+    .stat-card:hover { transform:translateY(-5px) scale(1.01); box-shadow:0 16px 40px rgba(0,0,0,0.5); }
+    .stat-card .ripple {
+      position:absolute; border-radius:50%; background:rgba(255,255,255,0.15);
+      transform:scale(0); animation:rippleAnim 0.6s linear; pointer-events:none;
+    }
+    @keyframes rippleAnim { to { transform:scale(4); opacity:0; } }
+    .stat-label  { font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:0.2em; color:var(--muted); margin-bottom:8px; }
+    .stat-value  { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:#fff; letter-spacing:0.05em; line-height:1; }
+    .stat-value.green { color:var(--neon); }
+    .stat-value.gold  { color:var(--neon2); }
+    .stat-value.red   { color:var(--red); }
+    .stat-sub    { font-size:0.8rem; color:var(--muted); margin-top:6px; font-weight:600; }
+
+    /* ── HEAT BAR ── */
+    .heat-bar-wrap { margin-top:8px; }
+    .heat-bar-bg   { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+    .heat-bar-fill { height:100%; transition:width 0.8s,background 0.8s; border-radius:2px; }
+
+    /* ── WANTED STARS ── */
+    .wanted-stars { display:flex; gap:4px; margin-top:8px; }
+    .star        { font-size:1rem; color:var(--border); transition:all 0.3s; }
+    .star.active { color:var(--neon2); filter:drop-shadow(0 0 4px var(--neon2)); }
+
+    /* ── ROW LAYOUTS ── */
+    .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+    .row-3 { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:24px; }
+
+    /* ── PANEL ── */
+    .panel {
+      background:var(--card); border:1px solid var(--border); padding:20px;
+      clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+      transition: background var(--transition-speed), border-color var(--transition-speed);
+    }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .panel-title  { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; letter-spacing:0.1em; color:#fff; }
+    .panel-badge  { font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:0.15em; color:var(--neon); border:1px solid var(--neon); padding:2px 8px; }
+
+    /* ── STATUS PANEL ── */
+    .status-item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+    .status-item:last-child { border-bottom:none; }
+    .status-key  { font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--muted); }
+    .status-val  { font-size:0.9rem; font-weight:700; color:var(--text); }
+    .status-badge { font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:3px 10px; letter-spacing:0.1em; }
+    .badge-green { background:rgba(0,245,160,0.1);  color:var(--neon);  border:1px solid var(--neon); }
+    .badge-red   { background:rgba(255,45,85,0.1);  color:var(--red);   border:1px solid var(--red); }
+    .badge-gold  { background:rgba(255,215,0,0.1);  color:var(--neon2); border:1px solid var(--neon2); }
+
+    /* ── CHARTS ── */
+    .chart-wrap { position:relative; height:200px; }
+
+    /* ── MAP ── */
+    #map { height:460px; }
+    .leaflet-container { background:#0a1520 !important; }
+    .map-filters { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .filter-btn {
+      font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:0.1em;
+      padding:5px 14px; border:1px solid var(--border); background:transparent;
+      color:var(--muted); cursor:pointer; transition:all 0.2s;
+    }
+    .filter-btn.on    { border-color:var(--neon); color:var(--neon); background:rgba(0,245,160,0.08); }
+    .filter-btn:hover { border-color:var(--text); color:var(--text); }
+
+    /* ── MAP TOAST ── */
+    .map-toast {
+      position:absolute; top:16px; left:50%; transform:translateX(-50%);
+      background:rgba(255,45,85,0.9); color:#fff; font-family:'Share Tech Mono',monospace;
+      font-size:0.7rem; letter-spacing:0.15em; padding:8px 20px;
+      display:none; z-index:1000; white-space:nowrap;
+    }
+
+    /* ── MISSION FORM ── */
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-group     { display:flex; flex-direction:column; gap:6px; }
+    .form-group.full { grid-column:1/-1; }
+    .form-label  { font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:0.15em; color:var(--muted); }
+    .form-input, .form-select {
+      background:rgba(0,245,160,0.04); border:1px solid var(--border); color:var(--text);
+      font-family:'Share Tech Mono',monospace; font-size:0.85rem; padding:10px 12px; outline:none;
+      transition:border-color 0.2s; width:100%;
+    }
+    .form-input:focus, .form-select:focus { border-color:var(--neon); box-shadow:0 0 10px rgba(0,245,160,0.1); }
+    .form-select option { background:var(--card); }
+    .form-btn {
+      font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:0.12em;
+      padding:11px 24px; border:none; cursor:pointer; transition:all 0.2s;
+      clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+    }
+    .form-btn.primary   { background:var(--neon); color:#050a0e; }
+    .form-btn.primary:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,245,160,0.3); }
+    .form-btn.secondary { background:transparent; color:var(--blue); border:1px solid var(--blue); }
+    .form-btn.secondary:hover { background:rgba(0,180,255,0.08); }
+    .heat-predict {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--neon2);
+      padding:8px 12px; border:1px solid rgba(255,215,0,0.2); background:rgba(255,215,0,0.05);
+      margin-top:4px; display:none; line-height:1.6;
+    }
+
+    /* ── MISSION LIST ── */
+    .mission-tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:1px solid var(--border); }
+    .mission-tab {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem; letter-spacing:0.15em;
+      padding:8px 16px; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent;
+      transition:all 0.2s; margin-bottom:-1px; user-select:none;
+    }
+    .mission-tab.active { color:var(--neon); border-bottom-color:var(--neon); }
+    .mission-item {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 0; border-bottom:1px solid var(--border);
+      transition: background 0.2s, transform 0.2s;
+      border-radius:2px;
+    }
+    .mission-item:hover { background:rgba(0,245,160,0.03); transform: translateX(4px); }
+    .mission-item:last-child { border-bottom:none; }
+    .mission-name  { font-weight:700; font-size:0.95rem; color:var(--text); }
+    .mission-meta  { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--muted); margin-top:3px; }
+    .mission-right { display:flex; align-items:center; gap:8px; flex-shrink:0; margin-left:12px; }
+    .mission-reward { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--neon); }
+    .complete-btn {
+      font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:0.1em;
+      padding:4px 10px; border:1px solid var(--neon); color:var(--neon); background:transparent;
+      cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden;
+    }
+    .complete-btn:hover { background:rgba(0,245,160,0.15); transform:scale(1.05); }
+    .fail-btn {
+      font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:0.1em;
+      padding:4px 10px; border:1px solid var(--red); color:var(--red); background:transparent;
+      cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden;
+    }
+    .fail-btn:hover { background:rgba(255,45,85,0.15); transform:scale(1.05); }
+    .empty-state { font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:var(--muted); text-align:center; padding:30px; }
+
+    /* ── STREAK BANNER ── */
+    .streak-banner {
+      display:none; position:fixed; top:80px; right:20px; z-index:9998;
+      background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,45,85,0.1));
+      border:1px solid var(--neon2); padding:14px 20px; max-width:320px;
+      font-family:'Share Tech Mono',monospace; font-size:0.75rem; letter-spacing:0.1em;
+      animation: streakSlide 0.4s cubic-bezier(0.22,1,0.36,1);
+      clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
+    }
+    @keyframes streakSlide { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+    .streak-title { color:var(--neon2); font-size:0.9rem; margin-bottom:4px; }
+    .streak-bonus { color:var(--neon); font-size:1.1rem; }
+
+    /* ── MUSIC TOGGLE ── */
+    .music-btn {
+      display:flex; align-items:center; justify-content:center;
+      width:34px; height:34px; border-radius:50%; cursor:pointer;
+      border:1px solid var(--neon); color:var(--neon);
+      background:rgba(0,245,160,0.06);
+      transition:all 0.25s ease; flex-shrink:0;
+      position:relative;
+    }
+    .music-btn:hover {
+      background:rgba(0,245,160,0.14);
+      box-shadow:0 0 14px rgba(0,245,160,0.25);
+      transform:scale(1.08);
+    }
+    .music-btn.music-off {
+      border-color:var(--muted); color:var(--muted);
+      background:transparent;
+    }
+    .music-btn.music-off:hover {
+      border-color:var(--red); color:var(--red);
+      box-shadow:0 0 10px rgba(255,45,85,0.2);
+    }
+    /* Pulsing ring when music is playing */
+    .music-btn:not(.music-off)::after {
+      content:''; position:absolute; inset:-4px; border-radius:50%;
+      border:1px solid var(--neon); opacity:0;
+      animation:musicPulse 2.2s ease-in-out infinite;
+    }
+    @keyframes musicPulse {
+      0%,100%{transform:scale(1);opacity:0}
+      50%{transform:scale(1.22);opacity:0.35}
+    }
+
+    /* ── THEME TOGGLE ── */
+    .theme-toggle {
+      position:relative; width:48px; height:26px; cursor:pointer;
+      background:var(--border); border-radius:13px; transition:background 0.3s;
+      flex-shrink:0; border:1px solid var(--muted);
+    }
+    .theme-toggle.light { background:rgba(255,45,154,0.2); border-color:var(--neon); }
+    .theme-toggle::after {
+      content:'🌙'; position:absolute; top:2px; left:3px;
+      width:20px; height:20px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:11px; transition:transform 0.3s, content 0.3s;
+      background:var(--card); line-height:20px; text-align:center;
+    }
+    .theme-toggle.light::after { content:'☀️'; transform:translateX(22px); background:var(--card); }
+    .topbar-right { display:flex; align-items:center; gap:12px; }
+
+    /* ── BONUS PARTICLE ── */
+    .bonus-particle {
+      position:fixed; pointer-events:none; z-index:10000;
+      font-family:'Bebas Neue',sans-serif; font-size:1.3rem;
+      animation: bonusFly 1.2s ease-out forwards;
+    }
+    @keyframes bonusFly {
+      0%   { opacity:1; transform:translateY(0) scale(1); }
+      100% { opacity:0; transform:translateY(-80px) scale(1.4); }
+    }
+
+    /* ── EMPIRE ── */
+    .tier-card {
+      background:linear-gradient(135deg,rgba(255,215,0,0.06),rgba(255,215,0,0.02));
+      border:1px solid rgba(255,215,0,0.2); padding:24px; text-align:center; margin-bottom:16px;
+      clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+    }
+    .tier-label    { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--muted); letter-spacing:0.2em; }
+    .tier-name     { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--neon2); letter-spacing:0.08em; margin:8px 0; }
+    .tier-bar-bg   { height:6px; background:var(--border); border-radius:3px; overflow:hidden; margin-top:12px; }
+    .tier-bar-fill { height:100%; background:linear-gradient(90deg,var(--neon2),var(--neon)); transition:width 0.8s; }
+    .tier-range    { display:flex; justify-content:space-between; margin-top:4px; font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:var(--muted); }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar       { width:4px; }
+    ::-webkit-scrollbar-track { background:var(--bg); }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    ::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
+    /* ── LEAFLET OVERRIDES ── */
+    .gta-popup .leaflet-popup-content-wrapper { background:transparent!important; border:none!important; box-shadow:0 8px 32px rgba(0,0,0,0.8)!important; padding:0!important; border-radius:0!important; }
+    .gta-popup .leaflet-popup-content { margin:0!important; }
+    .gta-popup .leaflet-popup-tip { background:#1a3040!important; }
+    .gta-popup .leaflet-popup-close-button { color:#4a6070!important; top:6px!important; right:10px!important; }
+    .leaflet-control-zoom a { background:#0a1520!important; color:var(--neon)!important; border-color:#1a3040!important; }
+    .leaflet-control-zoom a:hover { background:#1a3040!important; }
+
+    /* ── LIGHT MODE: fix hard-coded #fff text that becomes invisible ── */
+    body.light-mode .page-title              { color: var(--text); }
+    body.light-mode .brand-name              { color: var(--text); }
+    body.light-mode .panel-title             { color: var(--text); }
+    body.light-mode .stat-value              { color: var(--text); }
+    body.light-mode .mission-name            { color: var(--text); }
+    body.light-mode .tier-name               { color: var(--neon2); }
+    body.light-mode .mission-reward          { color: var(--neon); }
+    body.light-mode .user-name               { color: var(--text); }
+    body.light-mode .card-title              { color: var(--text); }
+    body.light-mode .main-title              { color: var(--text); text-shadow: none; }
+    body.light-mode .section-title           { color: var(--text); }
+    body.light-mode .feature-title           { color: var(--text); }
+    body.light-mode .page-sub                { color: var(--muted); }
+    body.light-mode .form-select option      { background: #fff; color: var(--text); }
+    body.light-mode .leaflet-control-zoom a  { background:#fff!important; color:var(--neon)!important; border-color:var(--border)!important; }
+
+    /* ── GLOBE INTRO OVERLAY ── */
+    #globeIntro {
+      display:none; position:fixed; inset:0; z-index:5000;
+      background:var(--bg); align-items:center; justify-content:center; flex-direction:column;
+    }
+    #globeIntro.show { display:flex; }
+    .globe-svg { animation: globeSpin 1.4s cubic-bezier(0.22,1,0.36,1) forwards; }
+    @keyframes globeSpin {
+      0%   { opacity:0; transform:scale(0.2) rotate(-180deg); }
+      60%  { opacity:1; transform:scale(1.1) rotate(20deg); }
+      80%  { transform:scale(0.95) rotate(-5deg); }
+      100% { opacity:1; transform:scale(1) rotate(0deg); }
+    }
+    .globe-label {
+      font-family:'Bebas Neue',sans-serif; font-size:1.4rem; letter-spacing:0.25em;
+      color:var(--neon); margin-top:20px; opacity:0;
+      animation:globeLabelIn 0.5s ease 0.8s both;
+    }
+    @keyframes globeLabelIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    #globeIntro .globe-out { animation:globeOut 0.4s ease forwards; }
+    @keyframes globeOut { to { opacity:0; transform:scale(1.08); } }
+
+    /* ── PODIUM / LEADERBOARD INTRO ── */
+    #podiumIntro {
+      display:none; position:fixed; inset:0; z-index:5000;
+      background:var(--bg); align-items:center; justify-content:flex-end; flex-direction:column;
+      padding-bottom:60px;
+    }
+    #podiumIntro.show { display:flex; }
+    .podium-wrap { display:flex; align-items:flex-end; gap:12px; justify-content:center; }
+    .podium-step {
+      width:80px; display:flex; flex-direction:column; align-items:center; gap:8px;
+      opacity:0;
+    }
+    .podium-step .p-medal  { font-size:2rem; }
+    .podium-step .p-block  {
+      width:80px; border-radius:4px 4px 0 0;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:#050a0e;
+    }
+    .podium-step.gold   .p-block { background:linear-gradient(180deg,#ffd700,#b8860b); height:120px; }
+    .podium-step.silver .p-block { background:linear-gradient(180deg,#c0c0c0,#808080); height:90px; }
+    .podium-step.bronze .p-block { background:linear-gradient(180deg,#cd7f32,#8b4513); height:70px; }
+    .podium-step.gold   { animation:podiumRiseGold   0.6s cubic-bezier(0.22,1,0.36,1) 0.2s both; }
+    .podium-step.silver { animation:podiumRiseSilver 0.6s cubic-bezier(0.22,1,0.36,1) 0.5s both; }
+    .podium-step.bronze { animation:podiumRiseBronze 0.6s cubic-bezier(0.22,1,0.36,1) 0.8s both; }
+    @keyframes podiumRiseGold   { from{opacity:0;transform:translateY(80px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes podiumRiseSilver { from{opacity:0;transform:translateY(60px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes podiumRiseBronze { from{opacity:0;transform:translateY(50px)}  to{opacity:1;transform:translateY(0)} }
+    .podium-label {
+      font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:0.2em;
+      color:var(--neon2); margin-bottom:28px; opacity:0;
+      animation:globeLabelIn 0.5s ease 0.1s both;
+    }
+    #podiumIntro .podium-out { animation:globeOut 0.4s ease forwards; }
+
+    /* ── TOP-3 LEADERBOARD BOXES ── */
+    .lb-gold   { border:2px solid #ffd700 !important; background:linear-gradient(135deg,rgba(255,215,0,0.10),rgba(255,215,0,0.04)) !important; box-shadow:0 0 18px rgba(255,215,0,0.18); }
+    .lb-silver { border:2px solid #c0c0c0 !important; background:linear-gradient(135deg,rgba(192,192,192,0.10),rgba(192,192,192,0.04)) !important; box-shadow:0 0 14px rgba(192,192,192,0.14); }
+    .lb-bronze { border:2px solid #cd7f32 !important; background:linear-gradient(135deg,rgba(205,127,50,0.10),rgba(205,127,50,0.04)) !important; box-shadow:0 0 12px rgba(205,127,50,0.12); }
+
+    /* ── MISSION COMPLETE SPLASH ── */
+    #missionCompleteSplash {
+      display:none; position:fixed; inset:0; z-index:8000;
+      background:rgba(0,0,0,0.92); backdrop-filter:blur(6px);
+      align-items:center; justify-content:center; flex-direction:column;
+      pointer-events:none;
+    }
+    #missionCompleteSplash.show { display:flex; pointer-events:all; }
+
+    .mc-title-wrap {
+      text-align:center; margin-bottom:32px;
+    }
+    .mc-badge {
+      font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+      letter-spacing:0.3em; color:var(--neon); border:1px solid var(--neon);
+      padding:4px 16px; display:inline-block; margin-bottom:12px;
+      opacity:0; animation:mcFadeUp 0.3s ease 0.1s both;
+    }
+    .mc-title {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(3rem, 8vw, 6rem);
+      letter-spacing:0.06em; line-height:1;
+      color:#fff;
+      text-shadow: 0 0 40px rgba(0,245,160,0.6), 0 0 80px rgba(0,245,160,0.2);
+      opacity:0;
+      animation:mcTitleBurst 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
+    }
+    .mc-title span { color:var(--neon); }
+    .mc-subtitle {
+      font-family:'Share Tech Mono',monospace; font-size:0.8rem;
+      letter-spacing:0.25em; color:var(--muted); margin-top:8px;
+      opacity:0; animation:mcFadeUp 0.4s ease 0.5s both;
+    }
+    @keyframes mcFadeUp {
+      from { opacity:0; transform:translateY(12px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes mcTitleBurst {
+      0%   { opacity:0; transform:scale(0.4) rotate(-3deg); }
+      60%  { opacity:1; transform:scale(1.08) rotate(1deg); }
+      80%  { transform:scale(0.97) rotate(-0.5deg); }
+      100% { opacity:1; transform:scale(1) rotate(0deg); }
+    }
+
+    /* Reward display */
+    .mc-reward {
+      font-family:'Bebas Neue',sans-serif; font-size:2.5rem;
+      color:var(--neon2); letter-spacing:0.1em;
+      opacity:0; animation:mcFadeUp 0.4s ease 0.55s both;
+      text-shadow:0 0 20px rgba(255,215,0,0.5);
+      margin-bottom:32px;
+    }
+
+    /* ── LEVEL UP BAR ── */
+    .mc-level-track {
+      width:min(580px,90vw); position:relative;
+      opacity:0; animation:mcFadeUp 0.4s ease 0.7s both;
+    }
+    .mc-level-labels {
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:12px;
+    }
+    .mc-level-box {
+      font-family:'Bebas Neue',sans-serif;
+      padding:6px 18px; letter-spacing:0.1em; font-size:1rem;
+      clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+    }
+    .mc-level-box.from {
+      background:rgba(74,96,112,0.3); border:1px solid #4a6070; color:#4a6070;
+    }
+    .mc-level-box.to {
+      background:rgba(0,245,160,0.1); border:1px solid var(--neon); color:var(--neon);
+      opacity:0; animation:levelBoxAppear 0.5s cubic-bezier(0.34,1.56,0.64,1) 2.0s both;
+    }
+    @keyframes levelBoxAppear {
+      from { opacity:0; transform:scale(0.6); }
+      to   { opacity:1; transform:scale(1); }
+    }
+    .mc-arrow {
+      font-size:1.4rem; color:var(--neon2);
+      opacity:0; animation:mcFadeUp 0.3s ease 1.8s both;
+    }
+
+    /* The progress bar track */
+    .mc-bar-track {
+      height:18px; background:rgba(26,48,64,0.6);
+      border:1px solid var(--border); border-radius:2px;
+      overflow:hidden; position:relative;
+    }
+    .mc-bar-fill {
+      height:100%; width:0%; border-radius:2px;
+      background:linear-gradient(90deg, var(--neon), #00d4ff, var(--neon2));
+      box-shadow:0 0 12px rgba(0,245,160,0.6);
+      transition:none;
+      position:relative;
+    }
+    .mc-bar-fill::after {
+      content:''; position:absolute; right:0; top:0; bottom:0;
+      width:8px;
+      background:rgba(255,255,255,0.5);
+      border-radius:2px;
+      box-shadow:0 0 8px #fff;
+    }
+    /* Bar segments/notches */
+    .mc-bar-notch {
+      position:absolute; top:0; bottom:0; width:1px;
+      background:rgba(5,10,14,0.5); pointer-events:none;
+    }
+    /* Level tick labels */
+    .mc-bar-ticks {
+      display:flex; justify-content:space-between;
+      margin-top:6px;
+      font-family:'Share Tech Mono',monospace; font-size:0.6rem;
+      letter-spacing:0.1em; color:var(--muted);
+    }
+
+    /* New tier announcement */
+    .mc-new-tier {
+      margin-top:24px; text-align:center;
+      opacity:0; transform:scale(0.5);
+      transition:all 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .mc-new-tier.show { opacity:1; transform:scale(1); }
+    .mc-new-tier-label {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+      letter-spacing:0.3em; color:var(--muted); margin-bottom:6px;
+    }
+    .mc-new-tier-name {
+      font-family:'Bebas Neue',sans-serif; font-size:2.8rem;
+      letter-spacing:0.1em; color:var(--neon2);
+      text-shadow:0 0 30px rgba(255,215,0,0.7);
+    }
+    .mc-new-tier-icon { font-size:2rem; margin-bottom:4px; }
+
+    /* Scanlines + close hint */
+    .mc-close-hint {
+      position:absolute; bottom:24px;
+      font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+      letter-spacing:0.2em; color:var(--muted);
+      opacity:0; animation:mcFadeUp 0.4s ease 3.2s both;
+    }
+
+    /* Confetti sparks */
+    .mc-spark {
+      position:fixed; pointer-events:none; z-index:8001;
+      width:6px; height:6px; border-radius:1px;
+      animation:mcSparkFly 1.4s ease-out forwards;
+    }
+    @keyframes mcSparkFly {
+      0%   { transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
+      100% { transform:translate(var(--sx),var(--sy)) rotate(var(--sr)) scale(0); opacity:0; }
+    }
+
+    /* ══════════════════════════════════════════
+       MISSION PLANNER INTRO OVERLAY
+    ══════════════════════════════════════════ */
+    #missionIntro {
+      display:none; position:fixed; inset:0; z-index:5000;
+      background:var(--bg); flex-direction:column;
+      align-items:center; justify-content:center;
+    }
+    #missionIntro.show { display:flex; }
+
+    .mi-stage {
+      position:relative; width:200px; height:200px;
+      border:1px solid rgba(0,245,160,0.12); border-radius:2px;
+    }
+    /* Crosshair lines */
+    .mi-line {
+      position:absolute; background:var(--neon); opacity:0;
+      box-shadow:0 0 8px var(--neon);
+    }
+    .mi-line.h { height:2px; width:0; top:50%; left:10px; transform:translateY(-50%); }
+    .mi-line.v { width:2px; height:0; left:50%; top:10px; transform:translateX(-50%); }
+    /* Corner brackets */
+    .mi-corner {
+      position:absolute; width:18px; height:18px;
+      animation:miCornerIn 0.3s ease 0.9s both;
+    }
+    .mi-corner.tl { top:8px;    left:8px;    border-top:2px solid var(--neon); border-left:2px solid var(--neon); }
+    .mi-corner.tr { top:8px;    right:8px;   border-top:2px solid var(--neon); border-right:2px solid var(--neon); }
+    .mi-corner.bl { bottom:8px; left:8px;    border-bottom:2px solid var(--neon); border-left:2px solid var(--neon); }
+    .mi-corner.br { bottom:8px; right:8px;   border-bottom:2px solid var(--neon); border-right:2px solid var(--neon); }
+    @keyframes miCornerIn { from{opacity:0;transform:scale(0.3)} to{opacity:0.6;transform:scale(1)} }
+    /* Scan bar */
+    .mi-scan {
+      position:absolute; left:0; right:0; height:2px; top:0;
+      background:linear-gradient(90deg,transparent,var(--neon),transparent);
+      box-shadow:0 0 10px var(--neon); opacity:0.7;
+    }
+    /* Target dots */
+    .mi-dot {
+      position:absolute; width:8px; height:8px; border-radius:50%;
+      background:var(--neon); box-shadow:0 0 10px var(--neon);
+      opacity:0; transform:scale(0);
+    }
+    /* Text readout lines */
+    .mi-text-line {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+      letter-spacing:0.2em; color:var(--neon); margin-top:10px;
+      opacity:0; transform:translateX(-12px);
+    }
+    /* Main label */
+    .mi-label-main {
+      font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:0.25em;
+      color:#fff; margin-top:24px; opacity:0;
+      animation:globeLabelIn 0.5s ease 1.3s both;
+    }
+
+    /* ══════════════════════════════════════════
+       ANALYTICS INTRO OVERLAY
+    ══════════════════════════════════════════ */
+    #analyticsIntro {
+      display:none; position:fixed; inset:0; z-index:5000;
+      background:var(--bg); flex-direction:column;
+      align-items:center; justify-content:flex-end;
+      padding-bottom:80px;
+    }
+    #analyticsIntro.show { display:flex; }
+
+    .ai-chart-area {
+      display:flex; align-items:flex-end; gap:10px;
+      height:160px; position:relative;
+      border-bottom:2px solid rgba(0,245,160,0.4);
+      padding:0 8px; min-width:300px;
+    }
+    .ai-bar {
+      width:28px; height:0; border-radius:2px 2px 0 0;
+      background:linear-gradient(180deg,var(--neon),rgba(0,245,160,0.3));
+      box-shadow:0 0 10px rgba(0,245,160,0.35);
+    }
+    .ai-bar:nth-child(odd) {
+      background:linear-gradient(180deg,var(--neon2),rgba(255,215,0,0.3));
+      box-shadow:0 0 10px rgba(255,215,0,0.25);
+    }
+    .ai-svg {
+      position:absolute; bottom:0; left:0; width:100%; pointer-events:none;
+    }
+    .ai-path {
+      fill:none; stroke:var(--red); stroke-width:2.5;
+      filter:drop-shadow(0 0 4px var(--red));
+      stroke-dasharray:500; stroke-dashoffset:500;
+    }
+    .ai-label {
+      font-family:'Bebas Neue',sans-serif; font-size:1.6rem;
+      letter-spacing:0.2em; color:#fff; margin-top:24px;
+      opacity:0; transform:translateY(16px);
+    }
+    .ai-sub {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+      letter-spacing:0.2em; color:var(--neon); margin-top:6px;
+      opacity:0; animation:globeLabelIn 0.5s ease 1.5s both;
+    }
+    .ai-ticker {
+      font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+      letter-spacing:0.15em; color:var(--neon2); margin-top:4px;
+      opacity:0; animation:globeLabelIn 0.4s ease 1.7s both;
+    }
+
+    /* ══════════════════════════════════════════
+       EMPIRE / CROWN INTRO OVERLAY
+    ══════════════════════════════════════════ */
+    #empireIntro {
+      display:none; position:fixed; inset:0; z-index:5000;
+      background:var(--bg); flex-direction:column;
+      align-items:center; justify-content:center;
+    }
+    #empireIntro.show { display:flex; }
+
+    .ei-crown-wrap {
+      position:relative; width:220px; height:220px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .ei-crown {
+      font-size:6rem; display:block;
+      filter:drop-shadow(0 0 24px rgba(255,215,0,0.9));
+    }
+    .ei-rays {
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .ei-ray {
+      position:absolute; width:3px; height:0;
+      background:linear-gradient(to top,var(--neon2),transparent);
+      transform-origin:bottom center;
+      bottom:50%; left:calc(50% - 1.5px);
+      opacity:0; box-shadow:0 0 6px var(--neon2);
+    }
+    .ei-ray:nth-child(1) { transform:rotate(0deg); }
+    .ei-ray:nth-child(2) { transform:rotate(45deg); }
+    .ei-ray:nth-child(3) { transform:rotate(90deg); }
+    .ei-ray:nth-child(4) { transform:rotate(135deg); }
+    .ei-ray:nth-child(5) { transform:rotate(180deg); }
+    .ei-ray:nth-child(6) { transform:rotate(225deg); }
+    .ei-ray:nth-child(7) { transform:rotate(270deg); }
+    .ei-ray:nth-child(8) { transform:rotate(315deg); }
+
+    .ei-title {
+      font-family:'Bebas Neue',sans-serif; font-size:2rem;
+      letter-spacing:0.3em; color:var(--neon2); margin-top:20px;
+      text-shadow:0 0 20px rgba(255,215,0,0.5);
+      opacity:0; transform:scale(0.6);
+    }
+    .ei-sub {
+      font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+      letter-spacing:0.2em; color:var(--muted); margin-top:8px;
+      opacity:0; animation:globeLabelIn 0.4s ease 1.3s both;
+    }
+    .ei-spark {
+      position:absolute; font-size:1.4rem;
+      opacity:0; transform:scale(0) translate(0,0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-sub">⬡ CLASSIFIED</div>
+    <div class="brand-name">LOS SANTOS</div>
+    <div class="brand-tag">COMMAND CENTER v2.5</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">COMMAND</div>
+    <div class="nav-item active" onclick="showSection('overview')">
+      <span class="nav-icon">📊</span> Overview
+    </div>
+    <div class="nav-item" onclick="showSection('map-section')">
+      <span class="nav-icon">🗺</span> Territory Map
+    </div>
+    <div class="nav-section">OPERATIONS</div>
+    <div class="nav-item" onclick="showSection('missions')">
+      <span class="nav-icon">🎯</span> Mission Planner
+    </div>
+    <div class="nav-section">INTEL</div>
+    <div class="nav-item" onclick="showSection('analytics')">
+      <span class="nav-icon">📈</span> Analytics
+    </div>
+    <div class="nav-item" onclick="showSection('leaderboard')">
+      <span class="nav-icon">🏆</span> Leaderboard
+    </div>
+    <div class="nav-item" onclick="showSection('replay')">
+      <span class="nav-icon">⏮</span> Activity Replay
+    </div>
+    <div class="nav-item" onclick="showSection('empire')">
+      <span class="nav-icon">👑</span> Empire Status
+    </div>
+  </nav>
+  <div class="sidebar-user">
+    <div class="user-info">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <div>
+        <div class="user-name" id="sidebarUsername">LOADING...</div>
+        <div class="user-tier" id="sidebarTier">Street Hustler</div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="doLogout()" title="Logout">⏏</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="pageTitle">COMMAND OVERVIEW</div>
+      <div class="page-sub"   id="pageTime">// LOADING...</div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><div class="live-dot"></div> LIVE FEED</div>
+      <button class="music-btn" id="musicToggle" onclick="toggleBgMusic()" title="BGM: ON — click to mute">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
+      <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Light/Dark Mode"></div>
+    </div>
+  </div>
+
+  <!-- ── OVERVIEW ── -->
+  <div class="section active" id="overview">
+    <div class="stats-grid">
+      <div class="stat-card green">
+        <div class="stat-label">TOTAL CASH</div>
+        <div class="stat-value green" id="statCash">$0</div>
+        <div class="stat-sub" id="statTier">Street Hustler</div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-label">ACTIVE OPERATIONS</div>
+        <div class="stat-value gold" id="statOps">0</div>
+        <div class="stat-sub">Missions running</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">HEAT LEVEL</div>
+        <div class="stat-value" id="statHeatVal">0</div>
+        <div class="heat-bar-wrap">
+          <div class="heat-bar-bg"><div class="heat-bar-fill" id="heatBar" style="width:0%;background:var(--neon)"></div></div>
+        </div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">TERRITORY</div>
+        <div class="stat-value" id="statTerritory">10%</div>
+        <div class="wanted-stars" id="wantedStars">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row-3">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">EARNINGS TREND</div>
+          <div class="panel-badge">LIVE</div>
+        </div>
+        <div class="chart-wrap"><canvas id="cashChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">CRIMINAL STATUS</div></div>
+        <div>
+          <div class="status-item">
+            <div class="status-key">STATUS</div>
+            <div><span class="status-badge badge-green" id="statusBadge">AT LARGE</span></div>
+          </div>
+          <div class="status-item">
+            <div class="status-key">LAST LOCATION</div>
+            <div class="status-val" id="lastLocation">Grove Street</div>
+          </div>
+          <div class="status-item">
+            <div class="status-key">MISSIONS DONE</div>
+            <div class="status-val" id="missionsDone">0</div>
+          </div>
+          <div class="status-item">
+            <div class="status-key">MISSIONS FAILED</div>
+            <div class="status-val" id="missionsFailed">0</div>
+          </div>
+          <div class="status-item">
+            <div class="status-key">SUCCESS RATE</div>
+            <div class="status-val" id="successRate">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">HEAT HISTORY</div></div>
+        <div class="chart-wrap"><canvas id="heatChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">MISSION BREAKDOWN</div></div>
+        <div class="chart-wrap"><canvas id="missionChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAP ── -->
+  <div class="section" id="map-section">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">TERRITORY MAP — LOS SANTOS</div>
+        <div class="panel-badge" id="targetBadge" style="display:none;color:var(--red);border-color:var(--red)">⚠ TARGET SPOTTED</div>
+      </div>
+      <div class="map-filters">
+        <button class="filter-btn on" onclick="toggleFilter(this,'all')">ALL</button>
+        <button class="filter-btn on" onclick="toggleFilter(this,'safehouse')">🏠 SAFEHOUSES</button>
+        <button class="filter-btn on" onclick="toggleFilter(this,'operation')">⚡ OPERATIONS</button>
+        <button class="filter-btn on" onclick="toggleFilter(this,'high_risk')">🔴 HIGH RISK</button>
+      </div>
+      <div style="position:relative">
+        <div class="map-toast" id="mapToast">⚠ HIGH-VALUE TARGET SPOTTED — LOCATION UPDATED</div>
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MISSIONS ── -->
+  <div class="section" id="missions">
+    <div class="row-2">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">PLAN NEW MISSION</div>
+          <div class="panel-badge">INTEL</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <div class="form-label">MISSION NAME</div>
+            <input class="form-input" id="mName" placeholder="e.g. Maze Bank Heist" autocomplete="off"/>
+          </div>
+          <div class="form-group">
+            <div class="form-label">MISSION TYPE</div>
+            <select class="form-select" id="mType">
+              <option>Heist</option>
+              <option>Delivery</option>
+              <option>Surveillance</option>
+              <option>Extraction</option>
+              <option>Assassination</option>
+              <option>Smuggling</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="form-label">RISK LEVEL</div>
+            <select class="form-select" id="mRisk" onchange="predictHeat()">
+              <option>Low</option>
+              <option selected>Medium</option>
+              <option>High</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="form-label">LOCATION</div>
+            <input class="form-input" id="mLocation" placeholder="Downtown, Vinewood..." autocomplete="off"/>
+          </div>
+          <div class="form-group">
+            <div class="form-label">REWARD ($)</div>
+            <input class="form-input" type="number" id="mReward" placeholder="50000" min="0" oninput="predictHeat()"/>
+          </div>
+          <div class="form-group">
+            <div class="form-label">START TIME</div>
+            <input class="form-input" type="datetime-local" id="mStart"/>
+          </div>
+          <div class="form-group">
+            <div class="form-label">END TIME</div>
+            <input class="form-input" type="datetime-local" id="mEnd"/>
+          </div>
+          <div class="form-group full">
+            <div class="heat-predict" id="heatPredict"></div>
+          </div>
+          <div class="form-group full" style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="form-btn secondary" onclick="predictHeat()">🔥 PREDICT HEAT</button>
+            <button class="form-btn primary"   onclick="submitMission()">▶ DEPLOY MISSION</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">ACTIVE MISSIONS</div>
+          <div class="panel-badge" id="missionCount">0</div>
+        </div>
+        <div class="mission-tabs">
+          <div class="mission-tab active" onclick="filterMissions('upcoming',this)">UPCOMING</div>
+          <div class="mission-tab" onclick="filterMissions('ongoing',this)">ONGOING</div>
+          <div class="mission-tab" onclick="filterMissions('completed',this)">DONE</div>
+          <div class="mission-tab" onclick="filterMissions('failed',this)">FAILED</div>
+        </div>
+        <div id="missionList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ANALYTICS ── -->
+  <div class="section" id="analytics">
+    <div class="panel" style="margin-bottom:24px">
+      <div class="panel-header"><div class="panel-title">CASH OVER TIME</div><div class="panel-badge">EARNINGS</div></div>
+      <div style="height:280px"><canvas id="cashChartFull"></canvas></div>
+    </div>
+    <div class="row-2">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">HEAT OVER TIME</div></div>
+        <div style="height:220px"><canvas id="heatChartFull"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">MISSION STATS</div></div>
+        <div style="height:220px"><canvas id="missionChartFull"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EMPIRE ── -->
+  <div class="section" id="empire">
+    <div style="max-width:620px;margin:0 auto">
+      <div class="tier-card">
+        <div class="tier-label">CURRENT EMPIRE TIER</div>
+        <div class="tier-name" id="empireTierName">STREET HUSTLER</div>
+        <div>
+          <div class="tier-bar-bg"><div class="tier-bar-fill" id="tierBar" style="width:0%"></div></div>
+          <div class="tier-range"><span id="tierMin">$0</span><span id="tierMax">$10,000</span></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-header"><div class="panel-title">EMPIRE MILESTONES</div></div>
+        <div class="status-item">
+          <div class="status-key">🔫 STREET HUSTLER</div>
+          <div><span class="status-badge badge-green">$0 — $10,000</span></div>
+        </div>
+        <div class="status-item">
+          <div class="status-key">💼 KINGPIN</div>
+          <div><span class="status-badge badge-gold">$10,000 — $100,000</span></div>
+        </div>
+        <div class="status-item">
+          <div class="status-key">👑 LOS SANTOS LEGEND</div>
+          <div><span class="status-badge" style="background:rgba(0,180,255,0.1);color:var(--blue);border:1px solid var(--blue)">$100,000+</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">YOUR STATS</div></div>
+        <div class="status-item">
+          <div class="status-key">TOTAL CASH EARNED</div>
+          <div class="status-val" id="empireCash">$0</div>
+        </div>
+        <div class="status-item">
+          <div class="status-key">TERRITORY CONTROLLED</div>
+          <div class="status-val" id="empireTerritory">10%</div>
+        </div>
+        <div class="status-item">
+          <div class="status-key">MISSIONS COMPLETED</div>
+          <div class="status-val" id="empireMissions">0</div>
+        </div>
+        <div class="status-item">
+          <div class="status-key">CURRENT HEAT</div>
+          <div class="status-val" id="empireHeat">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REPLAY ── -->
+  <div class="section" id="replay">
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header">
+        <div class="panel-title">⏮ ACTIVITY REPLAY</div>
+        <div style="display:flex;gap:8px">
+          <button class="form-btn secondary" style="font-size:0.7rem;padding:6px 14px" onclick="replayPlay()">▶ PLAY</button>
+          <button class="form-btn secondary" style="font-size:0.7rem;padding:6px 14px" onclick="replayPause()">⏸ PAUSE</button>
+          <button class="form-btn secondary" style="font-size:0.7rem;padding:6px 14px" onclick="replayReset()">⏮ RESET</button>
+        </div>
+      </div>
+      <div style="height:280px;margin-bottom:16px"><canvas id="replayChart"></canvas></div>
+      <div id="replayTimeline" style="max-height:240px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- ── LEADERBOARD ── -->
+  <div class="section" id="leaderboard">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🏆 LOS SANTOS LEADERBOARD</div>
+        <div class="panel-badge">TOP CRIMINALS</div>
+      </div>
+      <div id="leaderboardList" style="padding:8px 0"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- GLOBE INTRO OVERLAY -->
+<div id="globeIntro">
+  <svg class="globe-svg" width="140" height="140" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="70" cy="70" r="60" stroke="var(--neon)" stroke-width="2" fill="none" opacity="0.3"/>
+    <circle cx="70" cy="70" r="60" stroke="var(--neon)" stroke-width="2" fill="none" stroke-dasharray="8 4" opacity="0.6">
+      <animateTransform attributeName="transform" type="rotate" from="0 70 70" to="360 70 70" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <!-- Latitude lines -->
+    <ellipse cx="70" cy="70" rx="60" ry="20" stroke="var(--neon)" stroke-width="1" fill="none" opacity="0.4"/>
+    <ellipse cx="70" cy="70" rx="60" ry="40" stroke="var(--neon)" stroke-width="1" fill="none" opacity="0.3"/>
+    <!-- Longitude lines -->
+    <ellipse cx="70" cy="70" rx="20" ry="60" stroke="var(--neon)" stroke-width="1" fill="none" opacity="0.4"/>
+    <ellipse cx="70" cy="70" rx="40" ry="60" stroke="var(--neon)" stroke-width="1" fill="none" opacity="0.3"/>
+    <!-- Vertical axis -->
+    <line x1="70" y1="10" x2="70" y2="130" stroke="var(--neon)" stroke-width="1.5" opacity="0.5"/>
+    <line x1="10" y1="70" x2="130" y2="70" stroke="var(--neon)" stroke-width="1.5" opacity="0.5"/>
+    <!-- Glow center -->
+    <circle cx="70" cy="70" r="8" fill="var(--neon)" opacity="0.6"/>
+    <circle cx="70" cy="70" r="4" fill="var(--neon)"/>
+    <!-- Orbit dot -->
+    <circle r="5" fill="var(--red)">
+      <animateMotion dur="1.8s" repeatCount="indefinite">
+        <mpath href="#orbitPath"/>
+      </animateMotion>
+    </circle>
+    <ellipse id="orbitPath" cx="70" cy="70" rx="60" ry="20" fill="none"/>
+  </svg>
+  <div class="globe-label">SCANNING TERRITORY...</div>
+</div>
+
+<!-- PODIUM INTRO OVERLAY -->
+<div id="podiumIntro">
+  <div class="podium-label">🏆 LEADERBOARD</div>
+  <div class="podium-wrap">
+    <div class="podium-step silver">
+      <div class="p-medal">🥈</div>
+      <div class="p-block">2</div>
+    </div>
+    <div class="podium-step gold">
+      <div class="p-medal">🥇</div>
+      <div class="p-block">1</div>
+    </div>
+    <div class="podium-step bronze">
+      <div class="p-medal">🥉</div>
+      <div class="p-block">3</div>
+    </div>
+  </div>
+</div>
+
+<!-- MISSION PLANNER INTRO OVERLAY -->
+<div id="missionIntro">
+  <div class="mi-stage">
+    <div class="mi-corner tl"></div>
+    <div class="mi-corner tr"></div>
+    <div class="mi-corner bl"></div>
+    <div class="mi-corner br"></div>
+    <div class="mi-line h" id="miH"></div>
+    <div class="mi-line v" id="miV"></div>
+    <div class="mi-scan" id="miScan"></div>
+    <!-- Target dots scattered inside the stage -->
+    <div class="mi-dot" style="top:28%;left:22%"></div>
+    <div class="mi-dot" style="top:62%;left:68%"></div>
+    <div class="mi-dot" style="top:18%;left:72%"></div>
+    <div class="mi-dot" style="top:76%;left:32%"></div>
+    <div class="mi-dot" style="top:44%;left:50%"></div>
+  </div>
+  <div class="mi-text-line">// LOADING TARGET DATA...</div>
+  <div class="mi-text-line">// CALCULATING RISK VECTORS...</div>
+  <div class="mi-text-line">// MISSION PARAMETERS READY</div>
+  <div class="mi-label-main">MISSION PLANNER</div>
+</div>
+
+<!-- ANALYTICS INTRO OVERLAY -->
+<div id="analyticsIntro">
+  <div style="position:relative">
+    <div class="ai-chart-area">
+      <div class="ai-bar" data-h="60"></div>
+      <div class="ai-bar" data-h="95"></div>
+      <div class="ai-bar" data-h="45"></div>
+      <div class="ai-bar" data-h="130"></div>
+      <div class="ai-bar" data-h="80"></div>
+      <div class="ai-bar" data-h="150"></div>
+      <div class="ai-bar" data-h="110"></div>
+      <div class="ai-bar" data-h="70"></div>
+      <div class="ai-bar" data-h="140"></div>
+      <svg class="ai-svg" viewBox="0 0 290 160" preserveAspectRatio="none" style="height:160px">
+        <path class="ai-path" id="aiPath"
+          d="M0,160 L30,100 L60,120 L90,50 L120,80 L150,20 L180,55 L210,35 L240,60 L290,10"/>
+      </svg>
+    </div>
+    <div class="ai-label" id="aiLabel">ANALYTICS HQ</div>
+    <div class="ai-sub">// PROCESSING EMPIRE DATA...</div>
+    <div class="ai-ticker">▲ EARNINGS UP 24% THIS PERIOD</div>
+  </div>
+</div>
+
+<!-- EMPIRE STATUS / CROWN INTRO OVERLAY -->
+<div id="empireIntro">
+  <div class="ei-crown-wrap">
+    <div class="ei-rays">
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+      <div class="ei-ray"></div>
+    </div>
+    <span class="ei-crown" id="eiCrown">👑</span>
+    <span class="ei-spark" style="--sx:-80px;--sy:-55px;top:50%;left:50%">✨</span>
+    <span class="ei-spark" style="--sx:75px;--sy:-65px;top:50%;left:50%">⭐</span>
+    <span class="ei-spark" style="--sx:-90px;--sy:45px;top:50%;left:50%">💛</span>
+    <span class="ei-spark" style="--sx:85px;--sy:50px;top:50%;left:50%">✨</span>
+    <span class="ei-spark" style="--sx:5px;--sy:-90px;top:50%;left:50%">⭐</span>
+    <span class="ei-spark" style="--sx:-55px;--sy:80px;top:50%;left:50%">💛</span>
+  </div>
+  <div class="ei-title" id="eiTitle">EMPIRE STATUS</div>
+  <div class="ei-sub">// LOADING CRIMINAL LEGACY...</div>
+</div>
+
+<!-- MISSION COMPLETE SPLASH -->
+<div id="missionCompleteSplash">
+  <div class="mc-title-wrap">
+    <div class="mc-badge" id="mcBadge">⬡ OPERATION STATUS ⬡</div>
+    <div class="mc-title" id="mcTitle">MISSION<br><span>COMPLETE</span></div>
+    <div class="mc-subtitle" id="mcSubtitle">// OBJECTIVE ACCOMPLISHED //</div>
+  </div>
+
+  <div class="mc-reward" id="mcReward">+$0 EARNED</div>
+
+  <!-- Level progression bar -->
+  <div class="mc-level-track" id="mcLevelTrack">
+    <div class="mc-level-labels">
+      <div class="mc-level-box from" id="mcLevelFrom">STREET HUSTLER</div>
+      <div class="mc-arrow">▶▶</div>
+      <div class="mc-level-box to" id="mcLevelTo">STREET HUSTLER</div>
+    </div>
+
+    <div class="mc-bar-track" id="mcBarTrack">
+      <div class="mc-bar-fill" id="mcBarFill">
+        <!-- notches at 25%, 50%, 75% -->
+        <div class="mc-bar-notch" style="left:25%"></div>
+        <div class="mc-bar-notch" style="left:50%"></div>
+        <div class="mc-bar-notch" style="left:75%"></div>
+      </div>
+    </div>
+    <div class="mc-bar-ticks">
+      <span id="mcTickMin">$0</span>
+      <span id="mcTickMid"></span>
+      <span id="mcTickMax">$10,000</span>
+    </div>
+  </div>
+
+  <!-- Level up announcement (shown only when tier changes) -->
+  <div class="mc-new-tier" id="mcNewTier">
+    <div class="mc-new-tier-icon" id="mcTierIcon">👑</div>
+    <div class="mc-new-tier-label">EMPIRE TIER UNLOCKED</div>
+    <div class="mc-new-tier-name" id="mcTierName">KINGPIN</div>
+  </div>
+
+  <div class="mc-close-hint">CLICK ANYWHERE TO CONTINUE</div>
+</div>
+
+<div class="streak-banner" id="streakBanner">
+  <div class="streak-title">🔥 MISSION STREAK!</div>
+  <div id="streakMsg" class="streak-bonus">+$0 BONUS</div>
+  <div id="streakCount" style="color:var(--muted);font-size:0.65rem;margin-top:4px"></div>
+</div>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  // Patch renderStats to also update empire section
+  const _origRenderStats = renderStats;
+  renderStats = function(d) {
+    _origRenderStats(d);
+    // Update empire tab live data
+    const ec = document.getElementById('empireCash');
+    const et = document.getElementById('empireTerritory');
+    const em = document.getElementById('empireMissions');
+    const eh = document.getElementById('empireHeat');
+    if (ec) ec.textContent = '$' + (d.cash || 0).toLocaleString();
+    if (et) et.textContent = (d.territory || 10) + '%';
+    if (em) em.textContent = d.missions_completed || 0;
+    if (eh) eh.textContent = d.heat || 0;
+
+    // Update mission count badge
+    const mc = document.getElementById('missionCount');
+    if (mc) mc.textContent = d.active_operations || 0;
+  };
+</script>
+</body>
+</html>

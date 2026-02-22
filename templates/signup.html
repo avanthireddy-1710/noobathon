@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — Los Santos Command</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    :root { --neon:#00f5a0;--red:#ff2d55;--bg:#050a0e;--card:#0a1520;--border:#1a3040;--text:#c8d8e0;--muted:#4a6070; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none;z-index:99}
+    .bg{position:fixed;inset:0;background:radial-gradient(ellipse 60% 60% at 70% 50%,rgba(0,245,160,0.06) 0%,transparent 70%),radial-gradient(ellipse 50% 50% at 30% 50%,rgba(255,215,0,0.04) 0%,transparent 70%),var(--bg)}
+    .grid{position:fixed;inset:0;background-image:linear-gradient(rgba(0,245,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,245,160,0.03) 1px,transparent 1px);background-size:40px 40px}
+    .card{position:relative;z-index:10;background:var(--card);border:1px solid var(--border);width:100%;max-width:420px;padding:48px 40px;clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px));animation:slideUp 0.6s cubic-bezier(0.22,1,0.36,1) both}
+    @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+    .card-header{text-align:center;margin-bottom:32px}
+    .brand{font-family:'Bebas Neue',sans-serif;font-size:0.8rem;letter-spacing:0.3em;color:var(--neon);margin-bottom:12px}
+    .card-title{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:0.08em}
+    .card-sub{font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--muted);margin-top:6px;letter-spacing:0.15em}
+    .form-group{margin-bottom:18px}
+    label{font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:0.2em;color:var(--muted);display:block;margin-bottom:8px}
+    input{width:100%;background:rgba(0,245,160,0.04);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:0.9rem;padding:12px 16px;outline:none;transition:border-color 0.2s,box-shadow 0.2s;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))}
+    input:focus{border-color:var(--neon);box-shadow:0 0 16px rgba(0,245,160,0.15)}
+    .btn{width:100%;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:0.15em;background:var(--neon);color:#050a0e;border:none;cursor:pointer;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));transition:all 0.2s;margin-top:8px}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,245,160,0.4)}
+    .footer-links{text-align:center;margin-top:24px;font-size:0.85rem;color:var(--muted)}
+    .footer-links a{color:var(--neon);text-decoration:none}
+    .error-msg{background:rgba(255,45,85,0.1);border:1px solid var(--red);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:0.75rem;padding:10px 14px;margin-bottom:16px;display:none;letter-spacing:0.1em}
+    .success-msg{background:rgba(0,245,160,0.1);border:1px solid var(--neon);color:var(--neon);font-family:'Share Tech Mono',monospace;font-size:0.75rem;padding:10px 14px;margin-bottom:16px;display:none;letter-spacing:0.1em}
+    .back-link{position:fixed;top:20px;left:20px;z-index:100}
+    .back-link a{font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--muted);text-decoration:none;letter-spacing:0.15em;transition:color 0.2s}
+    .back-link a:hover{color:var(--neon)}
+    .tier-info{background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,0.2);padding:14px;margin-bottom:20px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:rgba(255,215,0,0.7);letter-spacing:0.1em;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="back-link"><a href="/">← BACK TO BASE</a></div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="brand">⬡ LOS SANTOS COMMAND ⬡</div>
+      <h1 class="card-title">NEW OPERATOR</h1>
+      <p class="card-sub">// REGISTER YOUR CRIMINAL IDENTITY //</p>
+    </div>
+
+    <div class="tier-info">👑 START AS STREET HUSTLER — RISE TO LOS SANTOS LEGEND</div>
+
+    <div class="error-msg" id="errorMsg">⚠ ERROR</div>
+    <div class="success-msg" id="successMsg">✓ OPERATOR REGISTERED — REDIRECTING...</div>
+
+    <div class="form-group">
+      <label>OPERATOR ID (USERNAME)</label>
+      <input type="text" id="username" placeholder="Enter username" autocomplete="off"/>
+    </div>
+    <div class="form-group">
+      <label>ACCESS CODE (PASSWORD)</label>
+      <input type="password" id="password" placeholder="Min. 6 characters"/>
+    </div>
+    <div class="form-group">
+      <label>CONFIRM ACCESS CODE</label>
+      <input type="password" id="confirm" placeholder="Repeat password"/>
+    </div>
+    <button class="btn" onclick="doSignup()">⬡ REGISTER OPERATOR</button>
+
+    <div class="footer-links">
+      <p>Already registered? <a href="/login">OPERATOR LOGIN</a></p>
+    </div>
+  </div>
+
+  <script>
+    async function doSignup() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+      const err = document.getElementById('errorMsg');
+      const suc = document.getElementById('successMsg');
+      err.style.display = 'none'; suc.style.display = 'none';
+
+      if (!username || !password) { err.textContent = '⚠ ALL FIELDS REQUIRED'; err.style.display='block'; return; }
+      if (password !== confirm) { err.textContent = '⚠ ACCESS CODES DO NOT MATCH'; err.style.display='block'; return; }
+
+      try {
+        const res = await fetch('/api/auth/signup', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'include',
+          body: JSON.stringify({username, password})
+        });
+        const data = await res.json();
+        if (res.ok) {
+          suc.style.display = 'block';
+          setTimeout(() => window.location.href = '/dashboard', 1200);
+        } else {
+          err.textContent = '⚠ ' + (data.error||'REGISTRATION FAILED').toUpperCase();
+          err.style.display = 'block';
+        }
+      } catch(e) {
+        err.textContent = '⚠ CONNECTION ERROR'; err.style.display='block';
+      }
+    }
+    document.addEventListener('keydown', e => { if(e.key==='Enter') doSignup(); });
+  </script>
+</body>
+</html>

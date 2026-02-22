@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — Los Santos Command</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --neon: #00f5a0; --red: #ff2d55; --bg: #050a0e;
+      --card: #0a1520; --border: #1a3040; --text: #c8d8e0; --muted: #4a6070;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+      pointer-events: none; z-index: 99;
+    }
+    .bg {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 30% 50%, rgba(0,245,160,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 70% 50%, rgba(255,45,85,0.06) 0%, transparent 70%),
+        var(--bg);
+    }
+    .grid {
+      position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(0,245,160,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,245,160,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .card {
+      position: relative; z-index: 10;
+      background: var(--card);
+      border: 1px solid var(--border);
+      width: 100%; max-width: 420px; padding: 48px 40px;
+      clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+      animation: slideUp 0.6s cubic-bezier(0.22,1,0.36,1) both;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card-header { text-align: center; margin-bottom: 36px; }
+    .brand {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.8rem; letter-spacing: 0.3em;
+      color: var(--neon); margin-bottom: 12px;
+    }
+    .card-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.5rem; color: #fff; letter-spacing: 0.08em;
+    }
+    .card-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-top: 6px; letter-spacing: 0.15em; }
+    .form-group { margin-bottom: 20px; }
+    label { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 0.2em; color: var(--muted); display: block; margin-bottom: 8px; }
+    input {
+      width: 100%; background: rgba(0,245,160,0.04);
+      border: 1px solid var(--border); color: var(--text);
+      font-family: 'Share Tech Mono', monospace; font-size: 0.9rem;
+      padding: 12px 16px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    }
+    input:focus { border-color: var(--neon); box-shadow: 0 0 16px rgba(0,245,160,0.15); }
+    .btn {
+      width: 100%; padding: 14px;
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; letter-spacing: 0.15em;
+      background: var(--neon); color: #050a0e; border: none; cursor: pointer;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+      transition: all 0.2s; margin-top: 8px;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,245,160,0.4); }
+    .btn:active { transform: translateY(0); }
+    .footer-links { text-align: center; margin-top: 24px; font-size: 0.85rem; color: var(--muted); }
+    .footer-links a { color: var(--neon); text-decoration: none; }
+    .footer-links a:hover { text-decoration: underline; }
+    .error-msg {
+      background: rgba(255,45,85,0.1); border: 1px solid var(--red);
+      color: var(--red); font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem; padding: 10px 14px; margin-bottom: 16px; display: none;
+      letter-spacing: 0.1em;
+    }
+    .back-link { position: fixed; top: 20px; left: 20px; z-index: 100; }
+    .back-link a {
+      font-family: 'Share Tech Mono', monospace; font-size: 0.75rem;
+      color: var(--muted); text-decoration: none; letter-spacing: 0.15em;
+      transition: color 0.2s;
+    }
+    .back-link a:hover { color: var(--neon); }
+
+    /* ── PUZZLE TRANSITION OVERLAY ── */
+    #puzzleOverlay {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg); overflow: hidden;
+      align-items: center; justify-content: center; flex-direction: column;
+    }
+    #puzzleOverlay.active { display: flex; }
+
+    .puzzle-stage {
+      position: relative; width: 320px; height: 320px;
+    }
+    .puzzle-piece {
+      position: absolute; width: 150px; height: 150px;
+      background: var(--card); border: 2px solid var(--neon);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem;
+      color: var(--neon); letter-spacing: 0.1em;
+      box-shadow: 0 0 20px rgba(0,245,160,0.25);
+      transition: transform 0.7s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease;
+      opacity: 0;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    }
+    /* TL */
+    .puzzle-piece:nth-child(1) { top: 0; left: 0; }
+    /* TR */
+    .puzzle-piece:nth-child(2) { top: 0; right: 0; }
+    /* BL */
+    .puzzle-piece:nth-child(3) { bottom: 0; left: 0; }
+    /* BR */
+    .puzzle-piece:nth-child(4) { bottom: 0; right: 0; }
+
+    .puzzle-flash {
+      position: absolute; inset: 0; background: var(--neon);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .puzzle-label {
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+      letter-spacing: 0.3em; color: var(--neon); margin-top: 28px;
+      opacity: 0; animation: none;
+    }
+    .puzzle-label.show { animation: labelPop 0.4s ease 0.05s both; }
+    @keyframes labelPop {
+      0% { opacity: 0; transform: scale(0.8) translateY(8px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Scanline on overlay */
+    #puzzleOverlay::before {
+      content: ''; position: fixed; inset: 0; z-index: 1;
+      background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
+      pointer-events: none;
+    }
+    .puzzle-stage { z-index: 2; }
+    .puzzle-label { z-index: 2; }
+
+    /* Neon seam lines between pieces */
+    .puzzle-seam {
+      position: absolute; background: var(--neon); opacity: 0;
+      transition: opacity 0.2s ease 0.7s;
+      box-shadow: 0 0 10px var(--neon);
+      z-index: 3;
+    }
+    .puzzle-seam.h { height: 2px; width: 320px; top: 160px; left: 0; }
+    .puzzle-seam.v { width: 2px; height: 320px; left: 160px; top: 0; }
+    .puzzle-seam.lit { opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="back-link"><a href="/">← BACK TO BASE</a></div>
+
+  <!-- PUZZLE ASSEMBLY OVERLAY -->
+  <div id="puzzleOverlay">
+    <div class="puzzle-stage" id="puzzleStage">
+      <div class="puzzle-piece" id="p1">LOS</div>
+      <div class="puzzle-piece" id="p2">SAN</div>
+      <div class="puzzle-piece" id="p3">TOS</div>
+      <div class="puzzle-piece" id="p4">⬡</div>
+      <div class="puzzle-seam h" id="seamH"></div>
+      <div class="puzzle-seam v" id="seamV"></div>
+      <div class="puzzle-flash" id="puzzleFlash"></div>
+    </div>
+    <div class="puzzle-label" id="puzzleLabel">ACCESS GRANTED</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="brand">⬡ LOS SANTOS COMMAND ⬡</div>
+      <h1 class="card-title">OPERATOR LOGIN</h1>
+      <p class="card-sub">// AUTHENTICATE TO CONTINUE //</p>
+    </div>
+
+    <div class="error-msg" id="errorMsg">⚠ AUTHENTICATION FAILED</div>
+
+    <div class="form-group">
+      <label>OPERATOR ID</label>
+      <input type="text" id="username" placeholder="Enter username" autocomplete="off"/>
+    </div>
+    <div class="form-group">
+      <label>ACCESS CODE</label>
+      <input type="password" id="password" placeholder="••••••••"/>
+    </div>
+    <button class="btn" onclick="doLogin()">▶ AUTHENTICATE</button>
+
+    <div class="footer-links">
+      <p>No account? <a href="/signup">REGISTER OPERATOR</a></p>
+    </div>
+  </div>
+
+  <script>
+    /* ── SOUND ENGINE ── */
+    let audioCtx = null;
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+    function playTone(freq, type='sine', dur=0.12, vol=0.08, delay=0) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = type; osc.frequency.value = freq;
+        const t = ctx.currentTime + delay;
+        gain.gain.setValueAtTime(0.001, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.start(t); osc.stop(t + dur);
+      } catch(e) {}
+    }
+
+    /* Mechanical click — short square burst */
+    function playClick() {
+      playTone(1400, 'square', 0.04, 0.06);
+      playTone(900,  'square', 0.04, 0.04, 0.03);
+    }
+
+    /* Keyboard type */
+    function playType() {
+      playTone(1100 + Math.random()*300, 'square', 0.03, 0.035);
+    }
+
+    /* Error buzzer */
+    function playError() {
+      playTone(180, 'sawtooth', 0.14, 0.09);
+      playTone(140, 'sawtooth', 0.16, 0.08, 0.15);
+    }
+
+    /* Puzzle piece swoosh — each piece gets a whoosh */
+    function playWhoosh(delay=0) {
+      try {
+        const ctx = getAudio();
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.35, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for(let i=0; i<data.length; i++) data[i] = (Math.random()*2-1) * Math.pow(1 - i/data.length, 2);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2400;
+        filter.frequency.linearRampToValueAtTime(800, ctx.currentTime + delay + 0.35);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+        gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + delay + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.35);
+        src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        src.start(ctx.currentTime + delay); src.stop(ctx.currentTime + delay + 0.36);
+      } catch(e) {}
+    }
+
+    /* Electromagnetic lock clunk when pieces snap */
+    function playClunk(delay=0) {
+      playTone(80,  'sawtooth', 0.08, 0.15, delay);
+      playTone(120, 'square',   0.06, 0.10, delay + 0.02);
+      playTone(40,  'sine',     0.12, 0.20, delay + 0.01);
+    }
+
+    /* Electric hum while assembling */
+    function playHum() {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth'; osc.frequency.value = 60;
+        const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 300;
+        osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 0.3);
+        gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 1.6);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.0);
+        osc.start(); osc.stop(ctx.currentTime + 2.1);
+      } catch(e) {}
+    }
+
+    /* Power-up synth arpeggio — plays after all pieces lock */
+    function playPowerUp() {
+      const notes = [220, 330, 440, 550, 660, 880, 1100];
+      notes.forEach((f, i) => {
+        playTone(f, 'sine', 0.18, 0.12, i * 0.07);
+        playTone(f * 2, 'triangle', 0.10, 0.05, i * 0.07 + 0.02);
+      });
+    }
+
+    /* Hustling city ambience — layered noise + rhythmic blips */
+    function playHustle() {
+      try {
+        const ctx = getAudio();
+        /* Bass rumble */
+        const rumbleLen = ctx.sampleRate * 1.2;
+        const rbuf = ctx.createBuffer(1, rumbleLen, ctx.sampleRate);
+        const rd = rbuf.getChannelData(0);
+        for(let i=0; i<rumbleLen; i++) rd[i] = (Math.random()*2-1) * 0.3;
+        const rsrc = ctx.createBufferSource(); rsrc.buffer = rbuf;
+        const rFilter = ctx.createBiquadFilter(); rFilter.type = 'lowpass'; rFilter.frequency.value = 120;
+        const rGain = ctx.createGain();
+        rGain.gain.setValueAtTime(0.001, ctx.currentTime + 0.05);
+        rGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.2);
+        rGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+        rsrc.connect(rFilter); rFilter.connect(rGain); rGain.connect(ctx.destination);
+        rsrc.start(ctx.currentTime + 0.05); rsrc.stop(ctx.currentTime + 1.3);
+      } catch(e) {}
+      /* Rhythmic street blips */
+      const blipPattern = [0, 0.15, 0.3, 0.52, 0.68, 0.85, 1.0];
+      blipPattern.forEach(t => playTone(300 + Math.random()*200, 'square', 0.04, 0.04, t));
+    }
+
+    /* ACCESS GRANTED chord */
+    function playGranted() {
+      [261, 330, 392, 523].forEach((f, i) => {
+        playTone(f,   'sine', 0.5, 0.10, i * 0.04);
+        playTone(f*2, 'sine', 0.3, 0.04, i * 0.04 + 0.01);
+      });
+    }
+
+    /* ── PUZZLE ANIMATION ── */
+    function runPuzzleAnimation(onDone) {
+      const overlay = document.getElementById('puzzleOverlay');
+      overlay.classList.add('active');
+
+      /* Starting positions: each piece flies in from a different corner */
+      const offsets = [
+        { x: '-260px', y: '-260px' }, /* TL: from top-left far */
+        { x:  '260px', y: '-260px' }, /* TR: from top-right far */
+        { x: '-260px', y:  '260px' }, /* BL: from bottom-left far */
+        { x:  '260px', y:  '260px' }, /* BR: from bottom-right far */
+      ];
+
+      const pieces = [
+        document.getElementById('p1'),
+        document.getElementById('p2'),
+        document.getElementById('p3'),
+        document.getElementById('p4'),
+      ];
+
+      /* Set initial displaced positions */
+      pieces.forEach((p, i) => {
+        p.style.transform = `translate(${offsets[i].x}, ${offsets[i].y}) scale(0.6)`;
+        p.style.opacity = '0';
+        p.style.transition = 'none';
+      });
+
+      /* Play hum + hustle ambience */
+      playHum();
+      setTimeout(() => playHustle(), 300);
+
+      /* Fly in each piece with stagger */
+      const delays = [100, 220, 350, 480];
+      pieces.forEach((p, i) => {
+        setTimeout(() => {
+          playWhoosh();
+          p.style.transition = `transform 0.65s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease`;
+          p.style.opacity = '1';
+          p.style.transform = 'translate(0,0) scale(1)';
+        }, delays[i]);
+
+        /* Clunk when it lands */
+        setTimeout(() => playClunk(), delays[i] + 600);
+      });
+
+      /* After all pieces land — power-up + flash + seams */
+      setTimeout(() => {
+        playPowerUp();
+
+        const flash = document.getElementById('puzzleFlash');
+        flash.style.opacity = '0.6';
+        setTimeout(() => flash.style.opacity = '0', 150);
+
+        document.getElementById('seamH').classList.add('lit');
+        document.getElementById('seamV').classList.add('lit');
+
+        /* Show label */
+        const label = document.getElementById('puzzleLabel');
+        label.classList.add('show');
+
+        playGranted();
+      }, 1150);
+
+      /* Redirect after animation */
+      setTimeout(() => {
+        overlay.style.transition = 'opacity 0.45s ease';
+        overlay.style.opacity = '0';
+        setTimeout(() => { if(onDone) onDone(); }, 460);
+      }, 2200);
+    }
+
+    /* ── LOGIN LOGIC ── */
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const err = document.getElementById('errorMsg');
+      err.style.display = 'none';
+      playClick();
+
+      if (!username || !password) {
+        playError();
+        err.textContent = '⚠ USERNAME AND PASSWORD REQUIRED';
+        err.style.display = 'block'; return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          runPuzzleAnimation(() => { window.location.href = '/dashboard'; });
+        } else {
+          playError();
+          err.textContent = '⚠ ' + (data.error || 'AUTHENTICATION FAILED').toUpperCase();
+          err.style.display = 'block';
+        }
+      } catch(e) {
+        playError();
+        err.textContent = '⚠ CONNECTION ERROR — TRY AGAIN';
+        err.style.display = 'block';
+      }
+    }
+
+    /* Keyboard sounds */
+    document.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('keydown', () => playType());
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  </script>
+</body>
+</html>
